@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { useTranslation } from "react-i18next";
 import ActiveCall from "./ActiveCall";
 import HeroCard from "./HeroCard";
 import CallsPage from "./CallsPage";
@@ -10,11 +11,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { mockAgents, type Agent } from "@/data/mockData";
 import { useTheme } from "@/contexts/ThemeContext";
 
-const getGreeting = () => {
+const useGreeting = () => {
+  const { t } = useTranslation();
   const h = new Date().getHours();
-  if (h < 12) return "Good Morning";
-  if (h < 18) return "Good Afternoon";
-  return "Good Evening";
+  if (h < 12) return t("dashboard.goodMorning");
+  if (h < 18) return t("dashboard.goodAfternoon");
+  return t("dashboard.goodEvening");
 };
 
 const Dashboard = () => {
@@ -22,6 +24,8 @@ const Dashboard = () => {
   const [activeAgent, setActiveAgent] = useState<Agent | null>(null);
   const { user } = useAuth();
   const { isDark } = useTheme();
+  const { t } = useTranslation();
+  const greeting = useGreeting();
   const firstName = user?.name?.split(" ")[0] || "Alex";
 
   if (activeAgent) {
@@ -105,11 +109,11 @@ const Dashboard = () => {
               transition={{ duration: 0.5 }}
             >
               <h1 className="text-xl font-bold text-foreground">
-                {getGreeting()},{" "}
+                {greeting},{" "}
                 <span className="text-gradient">{firstName}</span>.
               </h1>
               <p className="text-muted-foreground mt-1 text-sm">
-                Who should I call?
+                {t("dashboard.whoShouldICall")}
               </p>
             </motion.div>
 
@@ -134,9 +138,9 @@ const Dashboard = () => {
               className="mt-6 grid grid-cols-3 gap-3"
             >
               {[
-                { label: "Active", value: "1", accent: true },
-                { label: "Today", value: "4" },
-                { label: "Success", value: "92%" },
+                { label: t("dashboard.active"), value: "1", accent: true },
+                { label: t("dashboard.today"), value: "4" },
+                { label: t("dashboard.success"), value: "92%" },
               ].map((stat) => (
                 <div
                   key={stat.label}
@@ -169,9 +173,9 @@ const Dashboard = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
           >
-            <h1 className="text-xl font-bold text-foreground">Scheduled Appointments</h1>
+            <h1 className="text-xl font-bold text-foreground">{t("dashboard.scheduledAppointments")}</h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              Overview and history of your appointments
+              {t("dashboard.appointmentsOverview")}
             </p>
             <div className="mt-6">
               <AppointmentsSection showHistory />

@@ -1,0 +1,47 @@
+{
+  "auth": {
+    "welcomeBack": "Willkommen zurück",
+    "createAccount": "Erstelle dein Konto",
+    "signIn": "Anmelden",
+    "signUp": "Registrieren",
+    "name": "Name",
+    "namePlaceholder": "Dein Name",
+    "email": "E-Mail",
+    "emailPlaceholder": "du@beispiel.de",
+    "password": "Passwort",
+    "passwordPlaceholder": "Mindestens 6 Zeichen",
+    "or": "oder",
+    "continueWithGoogle": "Weiter mit Google",
+    "noAccount": "Noch kein Konto? Wechsle zu Registrieren.",
+    "hasAccount": "Bereits registriert? Wechsle zu Anmelden.",
+    "forgotPassword": "Passwort vergessen?",
+    "googleError": "Google-Anmeldung fehlgeschlagen"
+  },
+  "dashboard": {
+    "goodMorning": "Guten Morgen",
+    "goodAfternoon": "Guten Nachmittag",
+    "goodEvening": "Guten Abend",
+    "whoShouldICall": "Wen soll ich anrufen?",
+    "active": "Aktiv",
+    "today": "Heute",
+    "success": "Erfolg",
+    "scheduledAppointments": "Geplante Termine",
+    "appointmentsOverview": "Übersicht und Verlauf deiner Termine"
+  },
+  "settings": {
+    "profile": "Profil",
+    "notifications": "Benachrichtigungen",
+    "lightMode": "Heller Modus",
+    "darkMode": "Dunkler Modus",
+    "privacy": "Datenschutz",
+    "helpSupport": "Hilfe & Support",
+    "signOut": "Abmelden",
+    "language": "Sprache",
+    "user": "Benutzer"
+  },
+  "common": {
+    "loading": "Laden...",
+    "error": "Ein Fehler ist aufgetreten",
+    "retry": "Erneut versuchen"
+  }
+}

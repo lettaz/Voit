@@ -1,15 +1,32 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
+import { authClient, useSession } from "@/lib/auth";
 
 interface User {
+  id: string;
   name: string;
   email: string;
+  image?: string;
 }
 
 interface AuthContextType {
   user: User | null;
+  convexUserId: Id<"users"> | null;
+  isLoading: boolean;
   login: (email: string, password: string) => Promise<{ error?: string }>;
   signup: (name: string, email: string, password: string) => Promise<{ error?: string }>;
-  logout: () => void;
+  loginWithGoogle: () => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -21,55 +38,108 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    const stored = localStorage.getItem("voit_user");
-    return stored ? JSON.parse(stored) : null;
-  });
+  const { data: session, isPending: isLoading } = useSession();
+  const upsertUser = useMutation(api.users.upsertFromAuth);
+  const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
+  const syncedEmailRef = useRef<string | null>(null);
 
-  const login = async (email: string, password: string): Promise<{ error?: string }> => {
-    // Simulate login – accept any valid-looking credentials
-    if (!email || !password) return { error: "Bitte E-Mail und Passwort eingeben." };
-    if (password.length < 6) return { error: "Passwort muss mindestens 6 Zeichen lang sein." };
+  const user: User | null = session?.user
+    ? {
+        id: session.user.id,
+        name: session.user.name,
+        email: session.user.email,
+        image: session.user.image ?? undefined,
+      }
+    : null;
 
-    const stored = localStorage.getItem("voit_accounts");
-    const accounts: Record<string, { name: string; password: string }> = stored ? JSON.parse(stored) : {};
+  // Sync authenticated user to app's Convex users table
+  useEffect(() => {
+    if (!session?.user) {
+      // User logged out — reset
+      syncedEmailRef.current = null;
+      setConvexUserId(null);
+      return;
+    }
 
-    const account = accounts[email];
-    if (!account) return { error: "Kein Konto mit dieser E-Mail gefunden." };
-    if (account.password !== password) return { error: "Falsches Passwort." };
+    const { email, name, image } = session.user;
 
-    const u = { name: account.name, email };
-    setUser(u);
-    localStorage.setItem("voit_user", JSON.stringify(u));
-    return {};
-  };
+    // Don't re-sync if we already synced this email in this session
+    if (syncedEmailRef.current === email) return;
+    syncedEmailRef.current = email;
 
-  const signup = async (name: string, email: string, password: string): Promise<{ error?: string }> => {
-    if (!name.trim()) return { error: "Bitte Namen eingeben." };
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Bitte gültige E-Mail eingeben." };
-    if (password.length < 6) return { error: "Passwort muss mindestens 6 Zeichen lang sein." };
+    upsertUser({
+      email,
+      name: name || "User",
+      avatarUrl: image ?? undefined,
+      authProvider: "email", // Better Auth doesn't expose provider in session; default to email
+      authProviderId: session.user.id,
+    })
+      .then((id) => {
+        setConvexUserId(id);
+      })
+      .catch((err) => {
+        console.error("[AuthSync] Failed to sync user to Convex:", err);
+        // Allow retry on next render
+        syncedEmailRef.current = null;
+      });
+  }, [session?.user, upsertUser]);
 
-    const stored = localStorage.getItem("voit_accounts");
-    const accounts: Record<string, { name: string; password: string }> = stored ? JSON.parse(stored) : {};
+  const login = useCallback(
+    async (email: string, password: string): Promise<{ error?: string }> => {
+      try {
+        const result = await authClient.signIn.email({
+          email,
+          password,
+        });
+        if (result.error) {
+          return { error: result.error.message || "Login failed" };
+        }
+        return {};
+      } catch (err: any) {
+        return { error: err?.message || "An unexpected error occurred" };
+      }
+    },
+    []
+  );
 
-    if (accounts[email]) return { error: "Ein Konto mit dieser E-Mail existiert bereits." };
+  const signup = useCallback(
+    async (
+      name: string,
+      email: string,
+      password: string
+    ): Promise<{ error?: string }> => {
+      try {
+        const result = await authClient.signUp.email({
+          name,
+          email,
+          password,
+        });
+        if (result.error) {
+          return { error: result.error.message || "Signup failed" };
+        }
+        return {};
+      } catch (err: any) {
+        return { error: err?.message || "An unexpected error occurred" };
+      }
+    },
+    []
+  );
 
-    accounts[email] = { name, password };
-    localStorage.setItem("voit_accounts", JSON.stringify(accounts));
+  const loginWithGoogle = useCallback(async () => {
+    await authClient.signIn.social({
+      provider: "google",
+      callbackURL: window.location.origin,
+    });
+  }, []);
 
-    const u = { name, email };
-    setUser(u);
-    localStorage.setItem("voit_user", JSON.stringify(u));
-    return {};
-  };
-
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem("voit_user");
-  };
+  const logout = useCallback(async () => {
+    await authClient.signOut();
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout }}>
+    <AuthContext.Provider
+      value={{ user, convexUserId, isLoading, login, signup, loginWithGoogle, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

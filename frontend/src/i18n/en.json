@@ -1,0 +1,47 @@
+{
+  "auth": {
+    "welcomeBack": "Welcome back",
+    "createAccount": "Create your account",
+    "signIn": "Sign In",
+    "signUp": "Sign Up",
+    "name": "Name",
+    "namePlaceholder": "Your name",
+    "email": "Email",
+    "emailPlaceholder": "you@example.com",
+    "password": "Password",
+    "passwordPlaceholder": "At least 6 characters",
+    "or": "or",
+    "continueWithGoogle": "Continue with Google",
+    "noAccount": "Don't have an account? Switch to Sign Up.",
+    "hasAccount": "Already have an account? Switch to Sign In.",
+    "forgotPassword": "Forgot password?",
+    "googleError": "Google sign-in failed"
+  },
+  "dashboard": {
+    "goodMorning": "Good Morning",
+    "goodAfternoon": "Good Afternoon",
+    "goodEvening": "Good Evening",
+    "whoShouldICall": "Who should I call?",
+    "active": "Active",
+    "today": "Today",
+    "success": "Success",
+    "scheduledAppointments": "Scheduled Appointments",
+    "appointmentsOverview": "Overview and history of your appointments"
+  },
+  "settings": {
+    "profile": "Profile",
+    "notifications": "Notifications",
+    "lightMode": "Light Mode",
+    "darkMode": "Dark Mode",
+    "privacy": "Privacy",
+    "helpSupport": "Help & Support",
+    "signOut": "Sign Out",
+    "language": "Language",
+    "user": "User"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "retry": "Retry"
+  }
+}

@@ -34,6 +34,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Convex
+convex/_generated/
+
 # Misc
 *.log
 .cache/

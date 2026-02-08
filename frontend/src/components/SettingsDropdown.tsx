@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { Settings, LogOut, User, Bell, HelpCircle, Shield, Moon, Sun } from "lucide-react";
+import { Settings, LogOut, User, Bell, HelpCircle, Shield, Moon, Sun, Globe } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useTranslation } from "react-i18next";
 
 const SettingsDropdown = () => {
   const [open, setOpen] = useState(false);
@@ -10,6 +11,13 @@ const SettingsDropdown = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { theme, toggleTheme, isDark } = useTheme();
+  const { t, i18n } = useTranslation();
+
+  const toggleLanguage = () => {
+    const newLang = i18n.language === "en" ? "de" : "en";
+    i18n.changeLanguage(newLang);
+    localStorage.setItem("voit_language", newLang);
+  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -22,13 +30,14 @@ const SettingsDropdown = () => {
   }, []);
 
   const menuItems = [
-    { icon: User, label: "Profile", action: () => {} },
-    { icon: Bell, label: "Notifications", action: () => {} },
-    { icon: isDark ? Sun : Moon, label: isDark ? "Light Mode" : "Dark Mode", action: toggleTheme },
-    { icon: Shield, label: "Privacy", action: () => {} },
-    { icon: HelpCircle, label: "Help & Support", action: () => {} },
+    { icon: User, label: t("settings.profile"), action: () => {} },
+    { icon: Bell, label: t("settings.notifications"), action: () => {} },
+    { icon: isDark ? Sun : Moon, label: isDark ? t("settings.lightMode") : t("settings.darkMode"), action: toggleTheme },
+    { icon: Globe, label: i18n.language === "en" ? "Deutsch" : "English", action: toggleLanguage },
+    { icon: Shield, label: t("settings.privacy"), action: () => {} },
+    { icon: HelpCircle, label: t("settings.helpSupport"), action: () => {} },
     { divider: true },
-    { icon: LogOut, label: "Abmelden", action: () => { logout(); navigate("/auth"); }, destructive: true },
+    { icon: LogOut, label: t("settings.signOut"), action: () => { logout().then(() => navigate("/auth")); }, destructive: true },
   ] as const;
 
   return (
@@ -61,7 +70,7 @@ const SettingsDropdown = () => {
         >
           {/* User info */}
           <div className="px-4 py-3 border-b border-border/50">
-            <p className="text-sm font-semibold text-foreground">{user?.name || "Benutzer"}</p>
+            <p className="text-sm font-semibold text-foreground">{user?.name || t("settings.user")}</p>
             <p className="text-xs text-muted-foreground">{user?.email || ""}</p>
           </div>
 
@@ -75,7 +84,11 @@ const SettingsDropdown = () => {
                 key={i}
                 onClick={() => {
                   item.action();
-                  if (!("label" in item && (item.label === "Dark Mode" || item.label === "Light Mode"))) {
+                  const keepOpen = "label" in item && (
+                  item.label === t("settings.darkMode") || item.label === t("settings.lightMode") ||
+                  item.label === "Deutsch" || item.label === "English"
+                );
+                if (!keepOpen) {
                     setOpen(false);
                   }
                 }}

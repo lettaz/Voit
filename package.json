@@ -1,0 +1,27 @@
+{
+  "name": "voit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n convex,frontend,backend -c blue,green,yellow \"pnpm run dev:convex\" \"pnpm run dev:frontend\" \"pnpm run dev:backend\"",
+    "dev:convex": "npx convex dev",
+    "dev:frontend": "pnpm --filter frontend dev",
+    "dev:backend": "pnpm --filter backend dev",
+    "seed": "pnpm --filter backend seed"
+  },
+  "dependencies": {
+    "@convex-dev/better-auth": "^0.10.10",
+    "better-auth": "1.4.9",
+    "convex": "^1.21.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@swc/core",
+      "esbuild"
+    ]
+  }
+}
