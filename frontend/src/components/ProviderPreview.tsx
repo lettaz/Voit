@@ -138,7 +138,13 @@ const ProviderPreview = ({ intent, providers, onLaunch, onBack, loading }: Provi
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1 truncate flex items-center gap-1">
+                      {provider.phone && (
+                        <p className="text-xs text-muted-foreground mt-1 truncate flex items-center gap-1">
+                          <Phone className="w-3 h-3 shrink-0" />
+                          {provider.phone}
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate flex items-center gap-1">
                         <MapPin className="w-3 h-3 shrink-0" />
                         {provider.address}, {provider.city}
                       </p>

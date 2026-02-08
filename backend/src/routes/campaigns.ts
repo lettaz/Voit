@@ -15,6 +15,7 @@ import {
   checkBatchStatus,
   cancelBatch,
 } from "../services/orchestrator.js";
+import { getCallPhoneNumber, isDebugMode } from "../services/providerDiscovery.js";
 
 export async function campaignRoutes(
   app: FastifyInstance,
@@ -136,9 +137,12 @@ export async function campaignRoutes(
         campaignId,
         batchId,
         callCount: agentCallIds.length,
+        debugMode: isDebugMode(),
         providers: providers.map((p) => ({
           id: p._id,
           name: p.name,
+          realPhone: p.phone,
+          callPhone: getCallPhoneNumber(p.phone),
         })),
         status: "ACTIVE",
       };

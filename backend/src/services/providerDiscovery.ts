@@ -74,13 +74,26 @@ function getFirecrawlApiKey(): string {
 }
 
 /**
+ * Returns the phone number(s) configured for debug mode.
+ * Supports comma-separated list: "+1555...,+1666..."
+ */
+export function getDebugPhoneNumbers(): string[] {
+  const raw = process.env.DEBUG_PHONE_NUMBER || "+15551234567";
+  return raw.split(",").map((n) => n.trim()).filter(Boolean);
+}
+
+/**
  * Returns the phone number to use when placing calls.
- * In debug mode, always returns the debug number.
+ * In debug mode, returns a debug number (round-robins if multiple configured).
  * The *stored* phone in the database is always the real one.
  */
+let debugPhoneIndex = 0;
 export function getCallPhoneNumber(realPhone: string): string {
   if (isDebugMode()) {
-    return process.env.DEBUG_PHONE_NUMBER || "+15551234567";
+    const numbers = getDebugPhoneNumbers();
+    const number = numbers[debugPhoneIndex % numbers.length];
+    debugPhoneIndex++;
+    return number;
   }
   return realPhone;
 }

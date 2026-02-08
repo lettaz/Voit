@@ -171,8 +171,13 @@ export async function launchCampaign(
   // Compose the two-layer system prompt
   const systemPrompt = composeSystemPrompt(userCustomPrompt);
 
-  const recipients: BatchRecipient[] = providers.map((provider) => ({
-    phone_number: getCallPhoneNumber(provider.phone),
+  const recipients: BatchRecipient[] = providers.map((provider) => {
+    const callPhone = getCallPhoneNumber(provider.phone);
+    console.log(
+      `[Orchestrator] Recipient: ${provider.name} | real=${provider.phone} | calling=${callPhone}`
+    );
+    return {
+    phone_number: callPhone,
     name: provider.name,
     custom_variables: {
       agent_name: agentName,
@@ -186,7 +191,8 @@ export async function launchCampaign(
       client_name: user.name,
       client_phone: user.phone,
     },
-  }));
+  };
+  });
 
   const payload: BatchCallPayload = {
     agent_id: getAgentId(),
