@@ -5,11 +5,12 @@ import {
   MapPin,
   Check,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 
 // Agent personas — each is a personality archetype linked to a voice preset.
@@ -87,6 +88,63 @@ const SetupWizard = ({ onComplete, onSkip, initialStep = 0 }: SetupWizardProps) 
   const { convexUserId } = useAuth();
   const updateAgentName = useMutation(api.users.updateAgentName);
   const updateCustomPrompt = useMutation(api.users.updateCustomPrompt);
+  const updatePreferences = useMutation(api.users.updatePreferences);
+
+  const convexUser = useQuery(
+    api.users.getById,
+    convexUserId ? { id: convexUserId } : "skip"
+  );
+  const locationConnected = !!(convexUser?.location?.lat && convexUser?.location?.lng);
+  const [locating, setLocating] = useState(false);
+  const [locError, setLocError] = useState<string | null>(null);
+
+  const handleEnableLocation = () => {
+    if (!convexUserId || !navigator.geolocation) {
+      setLocError("Geolocation not supported");
+      return;
+    }
+    setLocating(true);
+    setLocError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        let area = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+        try {
+          const nomRes = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&zoom=12`,
+            { headers: { "User-Agent": "Voit/1.0" } }
+          );
+          const nomData = await nomRes.json();
+          if (nomData.display_name) {
+            const parts = nomData.display_name.split(",").map((s: string) => s.trim());
+            area = parts.slice(0, 3).join(", ");
+          }
+        } catch { /* keep coords */ }
+
+        try {
+          await updatePreferences({
+            id: convexUserId,
+            location: { area, lat: latitude, lng: longitude },
+          });
+        } catch (err) {
+          console.error("[Wizard] Location save failed:", err);
+          setLocError("Failed to save location");
+        } finally {
+          setLocating(false);
+        }
+      },
+      (err) => {
+        setLocating(false);
+        setLocError(
+          err.code === err.PERMISSION_DENIED
+            ? "Location permission denied"
+            : "Could not get location"
+        );
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+    );
+  };
 
   const localSettings = JSON.parse(
     localStorage.getItem("voit_agent_settings") || "{}"
@@ -288,8 +346,8 @@ const SetupWizard = ({ onComplete, onSkip, initialStep = 0 }: SetupWizardProps) 
               transition={{ duration: 0.3 }}
               className="text-center max-w-sm w-full"
             >
-              <div className="w-16 h-16 rounded-2xl glass mx-auto mb-6 flex items-center justify-center">
-                <MapPin className="w-8 h-8 text-primary" />
+              <div className={`w-16 h-16 rounded-2xl mx-auto mb-6 flex items-center justify-center ${locationConnected ? "bg-primary/15" : "glass"}`}>
+                <MapPin className={`w-8 h-8 ${locationConnected ? "text-primary" : "text-muted-foreground"}`} />
               </div>
               <h2 className="text-xl font-bold text-foreground mb-2">
                 {t("wizard.locationTitle")}
@@ -297,21 +355,49 @@ const SetupWizard = ({ onComplete, onSkip, initialStep = 0 }: SetupWizardProps) 
               <p className="text-muted-foreground text-sm mb-8">
                 {t("wizard.locationDesc")}
               </p>
-              <button
-                disabled
-                className="w-full py-3.5 rounded-xl text-sm font-medium glass text-muted-foreground border border-border/50 opacity-50 cursor-not-allowed mb-4"
-              >
-                {t("integrations.enable")}
-              </button>
-              <p className="text-[10px] text-muted-foreground mb-8">
-                {t("integrations.comingSoon")}
-              </p>
-              <button
-                onClick={handleSkipStep}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {t("wizard.skip")}
-              </button>
+              {locationConnected ? (
+                <>
+                  <div className="w-full py-3.5 rounded-xl text-sm font-medium text-center text-primary bg-primary/10 border border-primary/20 mb-2 flex items-center justify-center gap-2">
+                    <Check className="w-4 h-4" />
+                    {convexUser?.location?.area || t("integrations.locationEnabled")}
+                  </div>
+                  <button
+                    onClick={saveAndNext}
+                    className="w-full py-3.5 rounded-xl text-sm font-semibold text-primary-foreground hover:opacity-90 transition-opacity flex items-center justify-center gap-2 mt-3"
+                    style={{ background: "var(--gradient-primary)" }}
+                  >
+                    {t("wizard.continue")}
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={handleEnableLocation}
+                    disabled={locating}
+                    className="w-full py-3.5 rounded-xl text-sm font-semibold text-primary-foreground hover:opacity-90 transition-opacity mb-4 flex items-center justify-center gap-2 disabled:opacity-60"
+                    style={{ background: "var(--gradient-primary)" }}
+                  >
+                    {locating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {t("integrations.locating")}
+                      </>
+                    ) : (
+                      t("integrations.enable")
+                    )}
+                  </button>
+                  {locError && (
+                    <p className="text-[10px] text-destructive mb-4">{locError}</p>
+                  )}
+                  <button
+                    onClick={handleSkipStep}
+                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {t("wizard.skip")}
+                  </button>
+                </>
+              )}
             </motion.div>
           )}
 
