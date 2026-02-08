@@ -5,9 +5,8 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "../..");
 
-// Load .env then .env.local (Convex CLI writes to .env.local)
+// Load .env from the project root
 dotenv.config({ path: path.join(rootDir, ".env") });
-dotenv.config({ path: path.join(rootDir, ".env.local"), override: true });
 
 import Fastify from "fastify";
 import cors from "@fastify/cors";
@@ -15,6 +14,8 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import { ConvexHttpClient } from "convex/browser";
 import { providerRoutes } from "./routes/providers.js";
+import { toolRoutes } from "./routes/tools.js";
+import { campaignRoutes } from "./routes/campaigns.js";
 
 const PORT = Number(process.env.PORT) || 3088;
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:8080";
@@ -28,7 +29,23 @@ const app = Fastify({ logger: true });
 
 // --- Plugins ---
 await app.register(cors, {
-  origin: FRONTEND_URL,
+  origin: (origin, cb) => {
+    // Allow frontend origin
+    if (!origin || origin === FRONTEND_URL) {
+      cb(null, true);
+      return;
+    }
+    // Allow ElevenLabs webhook calls (no browser origin) and ngrok
+    if (
+      !origin ||
+      origin.includes("elevenlabs.io") ||
+      origin.includes("ngrok")
+    ) {
+      cb(null, true);
+      return;
+    }
+    cb(null, false);
+  },
   credentials: true,
 });
 
@@ -48,11 +65,23 @@ app.get("/api/health", async (_request, _reply) => {
     timestamp: new Date().toISOString(),
     convexConnected: !!CONVEX_URL,
     debugMode: process.env.DEBUG_MODE === "true",
+    elevenLabs: {
+      apiKeySet: !!process.env.ELEVENLABS_API_KEY,
+      agentIdSet: !!process.env.ELEVENLABS_AGENT_ID,
+      phoneNumberIdSet: !!process.env.ELEVENLABS_PHONE_NUMBER_ID,
+    },
+    apiUrl: process.env.API_URL || "(not set)",
   };
 });
 
 // Provider discovery routes
 await providerRoutes(app, convex);
+
+// Tool webhook endpoints (called by ElevenLabs during conversations)
+await toolRoutes(app, convex);
+
+// Campaign management routes
+await campaignRoutes(app, convex);
 
 // --- Start ---
 const start = async () => {
@@ -61,6 +90,9 @@ const start = async () => {
     console.log(`🚀 Backend running on http://localhost:${PORT}`);
     console.log(`   CORS origin: ${FRONTEND_URL}`);
     console.log(`   Convex URL: ${CONVEX_URL || "(not set)"}`);
+    console.log(`   API URL (webhooks): ${process.env.API_URL || "(not set)"}`);
+    console.log(`   ElevenLabs Agent: ${process.env.ELEVENLABS_AGENT_ID || "(not set)"}`);
+    console.log(`   Debug Mode: ${process.env.DEBUG_MODE === "true" ? "ON" : "OFF"}`);
   } catch (err) {
     app.log.error(err);
     process.exit(1);

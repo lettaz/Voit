@@ -18,6 +18,21 @@ export const getById = query({
   },
 });
 
+/** Find an agentCall by campaign + provider (used by tool webhooks). */
+export const getByCampaignAndProvider = query({
+  args: {
+    campaignId: v.id("campaigns"),
+    providerId: v.id("providers"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("agentCalls")
+      .withIndex("by_campaign", (q) => q.eq("campaignId", args.campaignId))
+      .filter((q) => q.eq(q.field("providerId"), args.providerId))
+      .first();
+  },
+});
+
 export const create = mutation({
   args: {
     campaignId: v.id("campaigns"),

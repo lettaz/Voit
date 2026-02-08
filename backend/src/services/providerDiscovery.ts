@@ -116,15 +116,14 @@ export async function discoverProviders(
     console.log(`[ProviderDiscovery] Searching Firecrawl: "${searchQuery}"`);
 
     // Use Firecrawl search to find relevant pages
+    // v4 API: search() returns SearchData { web?: [...], news?: [...], images?: [...] }
     const searchResponse = await client.search(searchQuery, {
       limit: options.limit || 10,
     });
 
-    if (
-      !searchResponse.success ||
-      !searchResponse.data ||
-      searchResponse.data.length === 0
-    ) {
+    const webResults = searchResponse.web || [];
+
+    if (webResults.length === 0) {
       console.log(
         "[ProviderDiscovery] No Firecrawl results — falling back to mock"
       );
@@ -138,8 +137,8 @@ export async function discoverProviders(
     // Extract provider info from search results
     const providers: DiscoveredProvider[] = [];
 
-    for (const result of searchResponse.data) {
-      const extracted = parseSearchResult(result, options.category);
+    for (const result of webResults) {
+      const extracted = parseSearchResult(result as Record<string, unknown>, options.category);
       if (extracted) {
         providers.push(extracted);
       }
@@ -186,87 +185,91 @@ export async function extractProviderFromUrl(
   if (!client) return null;
 
   try {
-    const scrapeResponse = await client.scrapeUrl(url, {
-      formats: ["extract"],
-      extract: {
-        schema: {
-          type: "object",
-          properties: {
-            name: { type: "string" },
-            phone: { type: "string" },
-            address: { type: "string" },
-            city: { type: "string" },
-            state: { type: "string" },
-            zipCode: { type: "string" },
-            description: { type: "string" },
-            rating: { type: "number" },
-            reviewCount: { type: "number" },
-            website: { type: "string" },
-            businessHours: {
-              type: "object",
-              properties: {
-                monday: {
-                  type: "object",
-                  properties: {
-                    open: { type: "string" },
-                    close: { type: "string" },
+    // v4 API: scrape() returns Document directly. Use "json" format with a
+    // schema to extract structured data (replaces the old "extract" format).
+    const scrapeResponse = await client.scrape(url, {
+      formats: [
+        {
+          type: "json",
+          schema: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              phone: { type: "string" },
+              address: { type: "string" },
+              city: { type: "string" },
+              state: { type: "string" },
+              zipCode: { type: "string" },
+              description: { type: "string" },
+              rating: { type: "number" },
+              reviewCount: { type: "number" },
+              website: { type: "string" },
+              businessHours: {
+                type: "object",
+                properties: {
+                  monday: {
+                    type: "object",
+                    properties: {
+                      open: { type: "string" },
+                      close: { type: "string" },
+                    },
                   },
-                },
-                tuesday: {
-                  type: "object",
-                  properties: {
-                    open: { type: "string" },
-                    close: { type: "string" },
+                  tuesday: {
+                    type: "object",
+                    properties: {
+                      open: { type: "string" },
+                      close: { type: "string" },
+                    },
                   },
-                },
-                wednesday: {
-                  type: "object",
-                  properties: {
-                    open: { type: "string" },
-                    close: { type: "string" },
+                  wednesday: {
+                    type: "object",
+                    properties: {
+                      open: { type: "string" },
+                      close: { type: "string" },
+                    },
                   },
-                },
-                thursday: {
-                  type: "object",
-                  properties: {
-                    open: { type: "string" },
-                    close: { type: "string" },
+                  thursday: {
+                    type: "object",
+                    properties: {
+                      open: { type: "string" },
+                      close: { type: "string" },
+                    },
                   },
-                },
-                friday: {
-                  type: "object",
-                  properties: {
-                    open: { type: "string" },
-                    close: { type: "string" },
+                  friday: {
+                    type: "object",
+                    properties: {
+                      open: { type: "string" },
+                      close: { type: "string" },
+                    },
                   },
-                },
-                saturday: {
-                  type: "object",
-                  properties: {
-                    open: { type: "string" },
-                    close: { type: "string" },
+                  saturday: {
+                    type: "object",
+                    properties: {
+                      open: { type: "string" },
+                      close: { type: "string" },
+                    },
                   },
-                },
-                sunday: {
-                  type: "object",
-                  properties: {
-                    open: { type: "string" },
-                    close: { type: "string" },
+                  sunday: {
+                    type: "object",
+                    properties: {
+                      open: { type: "string" },
+                      close: { type: "string" },
+                    },
                   },
                 },
               },
             },
+            required: ["name"],
           },
-          required: ["name"],
         },
-      },
+      ],
     });
 
-    if (!scrapeResponse.success || !scrapeResponse.extract) {
+    // v4: scrape returns Document; extracted data lives in the json field
+    const data = (scrapeResponse.json || scrapeResponse) as Record<string, unknown>;
+    if (!data.name) {
       return null;
     }
-
-    const data = scrapeResponse.extract as Record<string, unknown>;
 
     return {
       name: (data.name as string) || "Unknown",

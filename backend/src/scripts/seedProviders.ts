@@ -25,7 +25,6 @@ const rootDir = path.resolve(__dirname, "../../..");
 
 // Load env
 dotenv.config({ path: path.join(rootDir, ".env") });
-dotenv.config({ path: path.join(rootDir, ".env.local"), override: true });
 
 const CONVEX_URL = process.env.CONVEX_URL || process.env.VITE_CONVEX_URL || "";
 
