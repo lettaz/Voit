@@ -54,6 +54,7 @@ export interface BatchRecipient {
 export interface BatchCallPayload {
   agent_id: string;
   phone_number_id: string;
+  call_name: string;
   recipients: BatchRecipient[];
   system_prompt?: string;
   first_message?: string;
@@ -197,6 +198,7 @@ export async function launchCampaign(
   const payload: BatchCallPayload = {
     agent_id: getAgentId(),
     phone_number_id: getPhoneNumberId(),
+    call_name: `Campaign ${campaignId.slice(0, 8)} - ${request.category}`,
     recipients,
     // Override system prompt and first message with our composed templates
     system_prompt: systemPrompt,
