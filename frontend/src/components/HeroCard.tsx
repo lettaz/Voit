@@ -5,7 +5,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 
 interface HeroCardProps {
   onSubmit?: (message: string) => void;
-  onTalk?: () => void;
+  onTalk?: (message: string) => void;
 }
 
 const HeroCard = ({ onSubmit, onTalk }: HeroCardProps) => {
@@ -140,7 +140,7 @@ const HeroCard = ({ onSubmit, onTalk }: HeroCardProps) => {
         />
       </svg>
 
-      {/* Center orb – clickable Talk button */}
+      {/* Center orb – clickable Talk/Submit button */}
       <div
         className="absolute inset-0 flex items-center justify-center"
       >
@@ -222,9 +222,14 @@ const HeroCard = ({ onSubmit, onTalk }: HeroCardProps) => {
           />
         ))}
 
-        {/* Inner glass sphere – Talk button */}
+        {/* Inner glass sphere – Submit button */}
         <button
-          onClick={() => onTalk?.()}
+          onClick={() => {
+            if (inputText.trim()) {
+              onTalk?.(inputText.trim());
+              setInputText("");
+            }
+          }}
           className="relative w-20 h-20 rounded-full flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition-transform"
           style={{
             background: isDark
@@ -278,7 +283,7 @@ const HeroCard = ({ onSubmit, onTalk }: HeroCardProps) => {
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="What should I do for you?"
+              placeholder="I need a dentist appointment this week..."
               className="flex-1 bg-transparent text-sm px-3 py-2.5 outline-none text-foreground placeholder:text-muted-foreground"
             />
             <button

@@ -1,20 +1,34 @@
 import { X, Mic, MicOff, Volume2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import VoiceBubble from "./VoiceBubble";
-import type { Agent } from "@/data/mockData";
-import { mockCallSession } from "@/data/mockData";
 import { useTheme } from "@/contexts/ThemeContext";
 
 interface ActiveCallProps {
-  agent: Agent;
+  providerName: string;
+  task?: string;
+  status?: string;
+  transcript?: string[];
   onClose: () => void;
 }
 
-const ActiveCall = ({ agent, onClose }: ActiveCallProps) => {
+const ActiveCall = ({
+  providerName,
+  task,
+  status = "connected",
+  transcript = [
+    "Connection established...",
+    "Good day, how can I help you?",
+    "I'd like to schedule an appointment.",
+    "Of course! Does next Wednesday at 2:00 PM work for you?",
+    "Negotiating appointment...",
+  ],
+  onClose,
+}: ActiveCallProps) => {
   const [muted, setMuted] = useState(false);
-  const session = mockCallSession;
   const { isDark } = useTheme();
+  const { t } = useTranslation();
 
   return (
     <AnimatePresence>
@@ -43,10 +57,10 @@ const ActiveCall = ({ agent, onClose }: ActiveCallProps) => {
         <div className="relative z-10 flex items-center justify-between px-5 pt-5 pb-2">
           <div>
             <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">
-              Active Call
+              {t("activeCall.title")}
             </p>
             <h2 className="text-lg font-semibold text-foreground mt-0.5">
-              {agent.provider}
+              {providerName}
             </h2>
           </div>
           <button
@@ -67,28 +81,30 @@ const ActiveCall = ({ agent, onClose }: ActiveCallProps) => {
             transition={{ delay: 0.3 }}
             className="mt-8 text-sm font-semibold text-gradient"
           >
-            {session.status === "negotiating"
-              ? "Negotiating..."
-              : "Connected"}
+            {status === "negotiating"
+              ? t("activeCall.negotiating")
+              : t("activeCall.connected")}
           </motion.p>
-          <p className="text-xs text-muted-foreground mt-1.5">{agent.task}</p>
+          {task && (
+            <p className="text-xs text-muted-foreground mt-1.5">{task}</p>
+          )}
         </div>
 
         {/* Transcript */}
         <div className="relative z-10 px-5 pb-4">
           <div className="glass-accent rounded-2xl p-4 max-h-44 overflow-y-auto shadow-card gradient-border">
             <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium mb-3">
-              Live Transcript
+              {t("activeCall.liveTranscript")}
             </p>
             <div className="space-y-2.5">
-              {session.transcript.map((line, i) => (
+              {transcript.map((line, i) => (
                 <motion.p
                   key={i}
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.15 }}
                   className={`text-sm leading-relaxed ${
-                    i === session.transcript.length - 1
+                    i === transcript.length - 1
                       ? "text-gradient font-medium"
                       : "text-muted-foreground"
                   }`}

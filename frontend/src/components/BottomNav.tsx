@@ -1,5 +1,6 @@
 import { Home, PhoneCall, Calendar } from "lucide-react";
 import { motion } from "framer-motion";
+import { useTranslation } from "react-i18next";
 import { useTheme } from "@/contexts/ThemeContext";
 
 interface BottomNavProps {
@@ -7,14 +8,15 @@ interface BottomNavProps {
   onNavigate: (page: string) => void;
 }
 
-const tabs = [
-  { id: "dashboard", label: "Home", icon: Home },
-  { id: "calls", label: "Calls", icon: PhoneCall },
-  { id: "calendar", label: "Appointments", icon: Calendar },
-];
-
 const BottomNav = ({ activePage, onNavigate }: BottomNavProps) => {
   const { isDark } = useTheme();
+  const { t } = useTranslation();
+
+  const tabs = [
+    { id: "dashboard", label: t("nav.home"), icon: Home },
+    { id: "calls", label: t("nav.calls"), icon: PhoneCall },
+    { id: "calendar", label: t("nav.appointments"), icon: Calendar },
+  ];
 
   return (
     <nav

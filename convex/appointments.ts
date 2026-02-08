@@ -12,6 +12,25 @@ export const getByUser = query({
   },
 });
 
+/** Appointments with provider details for the frontend. */
+export const getByUserWithProviders = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const appointments = await ctx.db
+      .query("appointments")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .collect();
+
+    return Promise.all(
+      appointments.map(async (apt) => {
+        const provider = await ctx.db.get(apt.providerId);
+        return { ...apt, provider };
+      })
+    );
+  },
+});
+
 export const getByCampaign = query({
   args: { campaignId: v.id("campaigns") },
   handler: async (ctx, args) => {

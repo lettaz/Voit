@@ -1,15 +1,20 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
-import ActiveCall from "./ActiveCall";
+import { useQuery } from "convex/react";
+import { api } from "@convex/_generated/api";
 import HeroCard from "./HeroCard";
 import CallsPage from "./CallsPage";
 import AppointmentsSection from "./AppointmentsSection";
 import BottomNav from "./BottomNav";
 import SettingsDropdown from "./SettingsDropdown";
+import CampaignFlow, { type CampaignFlowState } from "./CampaignFlow";
+import CampaignProgress from "./CampaignProgress";
+import CampaignResults from "./CampaignResults";
+import ProfilePage from "./ProfilePage";
 import { useAuth } from "@/contexts/AuthContext";
-import { mockAgents, type Agent } from "@/data/mockData";
 import { useTheme } from "@/contexts/ThemeContext";
+import type { Id } from "@convex/_generated/dataModel";
 
 const useGreeting = () => {
   const { t } = useTranslation();
@@ -21,17 +26,67 @@ const useGreeting = () => {
 
 const Dashboard = () => {
   const [activePage, setActivePage] = useState("dashboard");
-  const [activeAgent, setActiveAgent] = useState<Agent | null>(null);
-  const { user } = useAuth();
+  const [campaignState, setCampaignState] = useState<CampaignFlowState | null>(null);
+  const [viewCampaignId, setViewCampaignId] = useState<Id<"campaigns"> | null>(null);
+  const [viewCampaignStep, setViewCampaignStep] = useState<"progress" | "results">("progress");
+  const [showProfile, setShowProfile] = useState(false);
+
+  const { user, convexUserId } = useAuth();
   const { isDark } = useTheme();
   const { t } = useTranslation();
   const greeting = useGreeting();
-  const firstName = user?.name?.split(" ")[0] || "Alex";
+  const firstName = user?.name?.split(" ")[0] || t("common.defaultName");
 
-  if (activeAgent) {
+  // Real-time stats
+  const stats = useQuery(
+    api.campaigns.getStats,
+    convexUserId ? { userId: convexUserId } : "skip"
+  );
+
+  // Campaign creation from HeroCard
+  const handleHeroSubmit = useCallback((input: string) => {
+    setCampaignState({ step: "parsing", input });
+  }, []);
+
+  // View a specific campaign (from Calls tab)
+  const handleViewCampaign = useCallback((id: Id<"campaigns">, step?: "progress" | "results") => {
+    setViewCampaignId(id);
+    setViewCampaignStep(step || "progress");
+  }, []);
+
+  // Campaign flow overlay
+  if (campaignState) {
     return (
-      <ActiveCall agent={activeAgent} onClose={() => setActiveAgent(null)} />
+      <CampaignFlow
+        state={campaignState}
+        onStateChange={setCampaignState}
+        onClose={() => setCampaignState(null)}
+      />
     );
+  }
+
+  // Viewing a specific campaign
+  if (viewCampaignId) {
+    if (viewCampaignStep === "results") {
+      return (
+        <CampaignResults
+          campaignId={viewCampaignId}
+          onClose={() => setViewCampaignId(null)}
+        />
+      );
+    }
+    return (
+      <CampaignProgress
+        campaignId={viewCampaignId}
+        onClose={() => setViewCampaignId(null)}
+        onViewResults={() => setViewCampaignStep("results")}
+      />
+    );
+  }
+
+  // Profile page
+  if (showProfile) {
+    return <ProfilePage onBack={() => setShowProfile(false)} />;
   }
 
   return (
@@ -71,36 +126,13 @@ const Dashboard = () => {
           filter: "blur(80px)",
         }}
       />
-      <div
-        className="fixed top-[10%] left-[15%] w-[250px] h-[250px] pointer-events-none rounded-full"
-        style={{
-          background: isDark
-            ? "radial-gradient(circle, hsl(142 55% 40% / 0.1) 0%, transparent 60%)"
-            : "radial-gradient(circle, hsl(155 65% 50% / 0.2) 0%, transparent 60%)",
-          filter: "blur(40px)",
-        }}
-      />
-      <div
-        className="fixed bottom-[20%] right-[10%] w-[300px] h-[300px] pointer-events-none rounded-full"
-        style={{
-          background: isDark
-            ? "radial-gradient(circle, hsl(210 55% 45% / 0.1) 0%, transparent 55%)"
-            : "radial-gradient(circle, hsl(140 60% 55% / 0.18) 0%, transparent 55%)",
-          filter: "blur(45px)",
-        }}
-      />
 
       {/* Header */}
       <header className="relative z-30 flex items-center justify-between px-5 pt-5 pb-2">
-        <div className="flex items-center gap-2.5">
-          <img
-            src="/voit.png"
-            alt="VoiT Logo"
-            className="w-8 h-8 rounded-lg object-cover"
-          />
-          <span className="text-lg font-bold text-foreground">VoiT</span>
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-bold text-foreground">Voit</span>
         </div>
-        <SettingsDropdown />
+        <SettingsDropdown onProfile={() => setShowProfile(true)} />
       </header>
 
       {/* Content */}
@@ -129,10 +161,7 @@ const Dashboard = () => {
               transition={{ duration: 0.5, delay: 0.05 }}
               className="mt-5"
             >
-              <HeroCard onTalk={() => {
-                const idleAgent = mockAgents.find(a => a.status === "idle") || mockAgents[0];
-                setActiveAgent(idleAgent);
-              }} />
+              <HeroCard onSubmit={handleHeroSubmit} onTalk={handleHeroSubmit} />
             </motion.div>
 
             {/* Stats bar */}
@@ -143,9 +172,19 @@ const Dashboard = () => {
               className="mt-6 grid grid-cols-3 gap-3"
             >
               {[
-                { label: t("dashboard.active"), value: "1", accent: true },
-                { label: t("dashboard.today"), value: "4" },
-                { label: t("dashboard.success"), value: "92%" },
+                {
+                  label: t("dashboard.active"),
+                  value: stats ? String(stats.activeCampaigns) : "—",
+                  accent: true,
+                },
+                {
+                  label: t("dashboard.today"),
+                  value: stats ? String(stats.todayCampaigns) : "—",
+                },
+                {
+                  label: t("dashboard.success"),
+                  value: stats ? `${stats.successRate}%` : "—",
+                },
               ].map((stat) => (
                 <div
                   key={stat.label}
@@ -164,12 +203,11 @@ const Dashboard = () => {
                 </div>
               ))}
             </motion.div>
-
           </>
         )}
 
         {activePage === "calls" && (
-          <CallsPage onCall={setActiveAgent} />
+          <CallsPage onViewCampaign={handleViewCampaign} />
         )}
 
         {activePage === "calendar" && (
@@ -178,7 +216,9 @@ const Dashboard = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
           >
-            <h1 className="text-xl font-bold text-foreground">{t("dashboard.scheduledAppointments")}</h1>
+            <h1 className="text-xl font-bold text-foreground">
+              {t("dashboard.scheduledAppointments")}
+            </h1>
             <p className="text-muted-foreground mt-1 text-sm">
               {t("dashboard.appointmentsOverview")}
             </p>
@@ -187,7 +227,6 @@ const Dashboard = () => {
             </div>
           </motion.div>
         )}
-
       </main>
 
       {/* Bottom Navigation */}

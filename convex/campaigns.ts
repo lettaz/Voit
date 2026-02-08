@@ -57,6 +57,113 @@ export const create = mutation({
   },
 });
 
+/** Dashboard stats for a user. */
+export const getStats = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const campaigns = await ctx.db
+      .query("campaigns")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    const activeCampaigns = campaigns.filter((c) => c.status === "ACTIVE").length;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayMs = today.getTime();
+    const todayCampaigns = campaigns.filter((c) => c.createdAt >= todayMs).length;
+
+    let completedCalls = 0;
+    let successfulCalls = 0;
+
+    for (const campaign of campaigns) {
+      const calls = await ctx.db
+        .query("agentCalls")
+        .withIndex("by_campaign", (q) => q.eq("campaignId", campaign._id))
+        .collect();
+      for (const call of calls) {
+        if (
+          ["COMPLETED", "FAILED", "NO_ANSWER", "VOICEMAIL", "CANCELLED"].includes(
+            call.status
+          )
+        ) {
+          completedCalls++;
+        }
+        if (call.outcome === "BOOKED") {
+          successfulCalls++;
+        }
+      }
+    }
+
+    const successRate =
+      completedCalls > 0
+        ? Math.round((successfulCalls / completedCalls) * 100)
+        : 0;
+
+    return {
+      activeCampaigns,
+      todayCampaigns,
+      successRate,
+      totalCampaigns: campaigns.length,
+    };
+  },
+});
+
+/** Campaigns with call progress and provider info for the calls tab. */
+export const listWithDetails = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const campaigns = await ctx.db
+      .query("campaigns")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .collect();
+
+    return Promise.all(
+      campaigns.map(async (campaign) => {
+        const calls = await ctx.db
+          .query("agentCalls")
+          .withIndex("by_campaign", (q) => q.eq("campaignId", campaign._id))
+          .collect();
+
+        const providers = (
+          await Promise.all(campaign.providerIds.map((id) => ctx.db.get(id)))
+        ).filter(Boolean);
+
+        const terminalStatuses = [
+          "COMPLETED",
+          "FAILED",
+          "NO_ANSWER",
+          "VOICEMAIL",
+          "CANCELLED",
+        ];
+
+        return {
+          ...campaign,
+          calls,
+          providers,
+          progress: {
+            total: calls.length,
+            completed: calls.filter((c) => terminalStatuses.includes(c.status))
+              .length,
+            successful: calls.filter((c) => c.outcome === "BOOKED").length,
+            slotsFound: calls
+              .filter((c) => c.slotsFound && c.slotsFound.length > 0)
+              .flatMap((c) =>
+                (c.slotsFound || []).map((s) => ({
+                  ...s,
+                  providerId: c.providerId,
+                  callId: c._id,
+                  confidenceScore: c.confidenceScore,
+                }))
+              ),
+          },
+        };
+      })
+    );
+  },
+});
+
 export const updateStatus = mutation({
   args: {
     campaignId: v.id("campaigns"),

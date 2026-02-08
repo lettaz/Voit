@@ -5,7 +5,11 @@ import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useTranslation } from "react-i18next";
 
-const SettingsDropdown = () => {
+interface SettingsDropdownProps {
+  onProfile?: () => void;
+}
+
+const SettingsDropdown = ({ onProfile }: SettingsDropdownProps) => {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const { user, logout } = useAuth();
@@ -30,7 +34,7 @@ const SettingsDropdown = () => {
   }, []);
 
   const menuItems = [
-    { icon: User, label: t("settings.profile"), action: () => {} },
+    { icon: User, label: t("settings.profile"), action: () => { onProfile?.(); } },
     { icon: Bell, label: t("settings.notifications"), action: () => {} },
     { icon: isDark ? Sun : Moon, label: isDark ? t("settings.lightMode") : t("settings.darkMode"), action: toggleTheme },
     { icon: Globe, label: i18n.language === "en" ? "Deutsch" : "English", action: toggleLanguage },
