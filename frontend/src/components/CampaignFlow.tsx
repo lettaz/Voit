@@ -26,26 +26,74 @@ const CampaignFlow = ({ state, onStateChange, onClose }: CampaignFlowProps) => {
   const createCampaign = useMutation(api.campaigns.create);
   const [launching, setLaunching] = useState(false);
 
-  // When in parsing step, parse intent and fetch providers
-  const intent = state.step === "parsing" ? parseIntent(state.input) : null;
-  const providers = useQuery(
-    api.providers.listByCategory,
-    intent ? { category: intent.category } : "skip"
+  // Get user profile for location data
+  const convexUser = useQuery(
+    api.users.getById,
+    convexUserId ? { id: convexUserId } : "skip"
   );
 
-  // Transition from parsing -> preview when providers load
+  // Parse intent from input text
+  const intent = state.step === "parsing" ? parseIntent(state.input) : null;
+
+  // Discover providers via backend (Google Places + Firecrawl + fallback mock)
   useEffect(() => {
-    if (state.step === "parsing" && intent && providers) {
-      if (providers.length === 0) {
-        // Also try "general" or list all if no category match
+    if (state.step !== "parsing" || !intent) return;
+
+    const discoverProviders = async () => {
+      try {
+        const location = convexUser?.location?.area || "Portland, OR";
+        const lat = convexUser?.location?.lat;
+        const lng = convexUser?.location?.lng;
+
+        const res = await fetch("/api/providers/discover", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category: intent.category,
+            location,
+            lat,
+            lng,
+            limit: 10,
+            query: intent.specifics,
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error(`Discovery failed: ${res.status}`);
+        }
+
+        const data = await res.json();
+        const providers = (data.providers || []) as Doc<"providers">[];
+
+        console.log(
+          `[CampaignFlow] Discovered ${providers.length} providers via ${data.source}`
+        );
+
+        if (providers.length === 0) {
+          // Fall back to querying existing Convex providers
+          console.log("[CampaignFlow] No providers from discovery, falling back to Convex DB");
+        }
+
+        onStateChange({
+          step: "preview",
+          intent,
+          providers,
+        });
+      } catch (err) {
+        console.error("[CampaignFlow] Provider discovery failed:", err);
+        // On error, still transition to preview with empty providers
+        onStateChange({
+          step: "preview",
+          intent,
+          providers: [],
+        });
       }
-      onStateChange({
-        step: "preview",
-        intent,
-        providers,
-      });
-    }
-  }, [state.step, intent, providers, onStateChange]);
+    };
+
+    // Small delay to let convexUser load if needed
+    const timer = setTimeout(discoverProviders, 300);
+    return () => clearTimeout(timer);
+  }, [state.step, intent, convexUser, onStateChange]);
 
   // Handle campaign launch
   const handleLaunch = useCallback(
@@ -68,11 +116,15 @@ const CampaignFlow = ({ state, onStateChange, onClose }: CampaignFlowProps) => {
 
         // POST to backend to launch the batch calls
         try {
-          await fetch(`/api/campaigns/launch`, {
+          const res = await fetch(`/api/campaigns/launch`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ campaignId }),
           });
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            console.error("Backend launch error:", errData);
+          }
         } catch (err) {
           console.error("Backend launch failed (campaign created in Convex):", err);
         }

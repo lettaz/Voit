@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Mic, SendHorizonal } from "lucide-react";
+import { Mic, MicOff, SendHorizonal } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 
 interface HeroCardProps {
@@ -8,8 +8,20 @@ interface HeroCardProps {
   onTalk?: (message: string) => void;
 }
 
+// Web Speech API types
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+}
+
 const HeroCard = ({ onSubmit, onTalk }: HeroCardProps) => {
   const [inputText, setInputText] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<ReturnType<typeof createRecognition> | null>(null);
   const { isDark } = useTheme();
 
   const handleSubmit = () => {
@@ -24,6 +36,66 @@ const HeroCard = ({ onSubmit, onTalk }: HeroCardProps) => {
       handleSubmit();
     }
   };
+
+  // Create a SpeechRecognition instance
+  function createRecognition() {
+    const SpeechRecognition =
+      (window as unknown as { SpeechRecognition?: new () => SpeechRecognition }).SpeechRecognition ||
+      (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognition }).webkitSpeechRecognition;
+    if (!SpeechRecognition) return null;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    return recognition;
+  }
+
+  const handleMicClick = useCallback(() => {
+    // If already listening, stop
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      return;
+    }
+
+    // If text already typed, submit it
+    if (inputText.trim()) {
+      onTalk?.(inputText.trim());
+      setInputText("");
+      return;
+    }
+
+    // Start voice recognition
+    const recognition = createRecognition();
+    if (!recognition) {
+      // Speech API not supported, just focus the input
+      console.warn("Speech recognition not supported in this browser");
+      return;
+    }
+
+    recognitionRef.current = recognition;
+    setIsListening(true);
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      const transcript = Array.from(event.results)
+        .map((result) => result[0].transcript)
+        .join("");
+      setInputText(transcript);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      recognitionRef.current = null;
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error("Speech recognition error:", event.error);
+      setIsListening(false);
+      recognitionRef.current = null;
+    };
+
+    recognition.start();
+  }, [isListening, inputText, onTalk]);
 
   return (
     <div className="relative w-full rounded-3xl overflow-hidden" style={{ minHeight: 320 }}>
@@ -222,42 +294,60 @@ const HeroCard = ({ onSubmit, onTalk }: HeroCardProps) => {
           />
         ))}
 
-        {/* Inner glass sphere – Submit button */}
+        {/* Inner glass sphere – Voice/Submit button */}
         <button
-          onClick={() => {
-            if (inputText.trim()) {
-              onTalk?.(inputText.trim());
-              setInputText("");
-            }
-          }}
+          onClick={handleMicClick}
           className="relative w-20 h-20 rounded-full flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition-transform"
           style={{
             background: isDark
               ? "radial-gradient(circle at 40% 30%, hsl(220 20% 25% / 0.6), hsl(222 22% 12% / 0.4))"
               : "radial-gradient(circle at 40% 30%, hsl(0 0% 100% / 0.6), hsl(0 0% 100% / 0.2))",
-            border: "1px solid hsl(142 50% 60% / 0.25)",
-            boxShadow: isDark
-              ? "0 0 30px hsl(142 70% 45% / 0.2), inset 0 1px 0 hsl(220 20% 30% / 0.3), 0 6px 24px hsl(0 0% 0% / 0.3)"
-              : "0 0 30px hsl(142 70% 45% / 0.12), inset 0 1px 0 hsl(0 0% 100% / 0.5), 0 6px 24px hsl(0 0% 0% / 0.06)",
+            border: isListening
+              ? "2px solid hsl(0 80% 55% / 0.6)"
+              : "1px solid hsl(142 50% 60% / 0.25)",
+            boxShadow: isListening
+              ? "0 0 30px hsl(0 80% 50% / 0.3), 0 6px 24px hsl(0 0% 0% / 0.3)"
+              : isDark
+                ? "0 0 30px hsl(142 70% 45% / 0.2), inset 0 1px 0 hsl(220 20% 30% / 0.3), 0 6px 24px hsl(0 0% 0% / 0.3)"
+                : "0 0 30px hsl(142 70% 45% / 0.12), inset 0 1px 0 hsl(0 0% 100% / 0.5), 0 6px 24px hsl(0 0% 0% / 0.06)",
           }}
         >
           <motion.div
             className="w-12 h-12 rounded-full flex items-center justify-center"
             style={{
-              background: "linear-gradient(135deg, hsl(142 70% 45%), hsl(155 55% 42%))",
-              boxShadow: "0 0 20px hsl(142 70% 45% / 0.3), 0 0 40px hsl(142 70% 45% / 0.1)",
+              background: isListening
+                ? "linear-gradient(135deg, hsl(0 80% 50%), hsl(0 70% 42%))"
+                : "linear-gradient(135deg, hsl(142 70% 45%), hsl(155 55% 42%))",
+              boxShadow: isListening
+                ? "0 0 20px hsl(0 80% 50% / 0.4), 0 0 40px hsl(0 80% 50% / 0.15)"
+                : "0 0 20px hsl(142 70% 45% / 0.3), 0 0 40px hsl(142 70% 45% / 0.1)",
             }}
-            animate={{
-              scale: [1, 1.06, 1],
-              boxShadow: [
-                "0 0 20px hsl(142 70% 45% / 0.3), 0 0 40px hsl(142 70% 45% / 0.1)",
-                "0 0 28px hsl(142 70% 45% / 0.4), 0 0 56px hsl(142 70% 45% / 0.15)",
-                "0 0 20px hsl(142 70% 45% / 0.3), 0 0 40px hsl(142 70% 45% / 0.1)",
-              ],
-            }}
-            transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+            animate={
+              isListening
+                ? {
+                    scale: [1, 1.15, 1],
+                    boxShadow: [
+                      "0 0 20px hsl(0 80% 50% / 0.4), 0 0 40px hsl(0 80% 50% / 0.15)",
+                      "0 0 36px hsl(0 80% 50% / 0.6), 0 0 60px hsl(0 80% 50% / 0.2)",
+                      "0 0 20px hsl(0 80% 50% / 0.4), 0 0 40px hsl(0 80% 50% / 0.15)",
+                    ],
+                  }
+                : {
+                    scale: [1, 1.06, 1],
+                    boxShadow: [
+                      "0 0 20px hsl(142 70% 45% / 0.3), 0 0 40px hsl(142 70% 45% / 0.1)",
+                      "0 0 28px hsl(142 70% 45% / 0.4), 0 0 56px hsl(142 70% 45% / 0.15)",
+                      "0 0 20px hsl(142 70% 45% / 0.3), 0 0 40px hsl(142 70% 45% / 0.1)",
+                    ],
+                  }
+            }
+            transition={{ duration: isListening ? 0.8 : 2.5, repeat: Infinity, ease: "easeInOut" }}
           >
-            <Mic className="w-5 h-5 text-primary-foreground" />
+            {isListening ? (
+              <MicOff className="w-5 h-5 text-primary-foreground" />
+            ) : (
+              <Mic className="w-5 h-5 text-primary-foreground" />
+            )}
           </motion.div>
         </button>
       </div>

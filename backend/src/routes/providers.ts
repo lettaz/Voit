@@ -31,7 +31,7 @@ export async function providerRoutes(
   app.post<{
     Body: DiscoveryOptions;
   }>("/api/providers/discover", async (request, reply) => {
-    const { category, location, limit, query } = request.body;
+    const { category, location, lat, lng, radiusMeters, limit, query } = request.body;
 
     if (!category || !location) {
       return reply.status(400).send({
@@ -42,6 +42,9 @@ export async function providerRoutes(
     const result = await discoverProviders({
       category,
       location,
+      lat,
+      lng,
+      radiusMeters,
       limit,
       query,
     });
