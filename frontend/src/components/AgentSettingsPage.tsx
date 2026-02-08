@@ -16,12 +16,10 @@ import {
   Loader2,
   Play,
   Search,
-  Bot,
   Settings2,
   MessageSquare,
   AlertCircle,
   ArrowRightLeft,
-  Cpu,
   ChevronDown,
   Phone,
 } from "lucide-react";
@@ -48,7 +46,9 @@ interface AgentSettingsPageProps {
   onBack: () => void;
 }
 
-// ─── System tools that ElevenLabs supports ───────
+// ─── Built-in system tools that ElevenLabs supports ───────
+// These are configured via conversation_config.agent.prompt.built_in_tools
+// Each key maps to null (disabled) or a config object (enabled)
 const SYSTEM_TOOLS = [
   {
     id: "end_call",
@@ -65,7 +65,7 @@ const SYSTEM_TOOLS = [
     configurable: false,
   },
   {
-    id: "hand_off_to_human",
+    id: "transfer_to_number",
     icon: PhoneForwarded,
     labelKey: "agentSettings.tools.handoff",
     descKey: "agentSettings.tools.handoffDesc",
@@ -79,17 +79,17 @@ const SYSTEM_TOOLS = [
     configurable: false,
   },
   {
-    id: "agent_transfer",
+    id: "transfer_to_agent",
     icon: ArrowRightLeft,
     labelKey: "agentSettings.tools.agentTransfer",
     descKey: "agentSettings.tools.agentTransferDesc",
     configurable: false,
   },
   {
-    id: "custom_llm",
-    icon: Cpu,
-    labelKey: "agentSettings.tools.customLlm",
-    descKey: "agentSettings.tools.customLlmDesc",
+    id: "play_keypad_touch_tone",
+    icon: Phone,
+    labelKey: "agentSettings.tools.dtmf",
+    descKey: "agentSettings.tools.dtmfDesc",
     configurable: false,
   },
 ];
@@ -127,20 +127,20 @@ const AgentSettingsPage = ({ onBack }: AgentSettingsPageProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cloneInputRef = useRef<HTMLInputElement>(null);
 
-  // System tools state
+  // System tools state (matches built_in_tools keys from ElevenLabs API)
   const [enabledTools, setEnabledTools] = useState<Record<string, boolean>>({
-    end_call: true,
-    voicemail_detection: true,
-    hand_off_to_human: false,
-    language_detection: true,
-    agent_transfer: false,
-    custom_llm: false,
+    end_call: false,
+    voicemail_detection: false,
+    transfer_to_number: false,
+    language_detection: false,
+    transfer_to_agent: false,
+    play_keypad_touch_tone: false,
   });
 
-  // Handoff config
+  // Transfer-to-number (human handoff) config
   const [handoffExpanded, setHandoffExpanded] = useState(false);
   const [handoffPhone, setHandoffPhone] = useState("");
-  const [handoffMode, setHandoffMode] = useState<"cold" | "warm">("cold");
+  const [handoffCondition, setHandoffCondition] = useState("When the user requests to speak with a human agent");
 
   // Behavior state
   const [firstMessage, setFirstMessage] = useState("");
@@ -166,26 +166,26 @@ const AgentSettingsPage = ({ onBack }: AgentSettingsPageProps) => {
       setFirstMessage(data.conversation_config?.agent?.first_message || "");
       setSystemPrompt(data.conversation_config?.agent?.prompt?.prompt || "");
 
-      // Extract system tools from agent config
-      const agentTools = data.conversation_config?.agent?.prompt?.tools || [];
+      // Extract built-in system tools from agent config
+      const builtIn = data.conversation_config?.agent?.prompt?.built_in_tools || {};
       const toolMap: Record<string, boolean> = {
         end_call: false,
         voicemail_detection: false,
-        hand_off_to_human: false,
+        transfer_to_number: false,
         language_detection: false,
-        agent_transfer: false,
-        custom_llm: false,
+        transfer_to_agent: false,
+        play_keypad_touch_tone: false,
       };
-      for (const tool of agentTools as { type?: string; name?: string; phone_number?: string; transfer_mode?: string }[]) {
-        const name = tool.name || tool.type || "";
-        if (name in toolMap) {
-          toolMap[name] = true;
-        }
-        // Extract handoff config
-        if (name === "hand_off_to_human") {
-          if (tool.phone_number) setHandoffPhone(tool.phone_number);
-          if (tool.transfer_mode) setHandoffMode(tool.transfer_mode as "cold" | "warm");
-        }
+      for (const key of Object.keys(toolMap)) {
+        // A tool is enabled if its value is not null/undefined
+        toolMap[key] = builtIn[key] != null;
+      }
+      // Extract transfer-to-number (human handoff) config
+      const transferConfig = builtIn.transfer_to_number;
+      if (transferConfig?.params?.transfers?.length > 0) {
+        const firstTransfer = transferConfig.params.transfers[0];
+        if (firstTransfer.phone_number) setHandoffPhone(firstTransfer.phone_number);
+        if (firstTransfer.condition) setHandoffCondition(firstTransfer.condition);
       }
       setEnabledTools(toolMap);
     } catch (err) {
@@ -343,26 +343,44 @@ const AgentSettingsPage = ({ onBack }: AgentSettingsPageProps) => {
   const handleSaveTools = async () => {
     setSaving(true);
     try {
-      // Build system tools array
-      const tools = Object.entries(enabledTools)
-        .filter(([, enabled]) => enabled)
-        .map(([name]) => {
-          if (name === "hand_off_to_human") {
-            return {
-              type: "system",
-              name,
-              ...(handoffPhone ? { phone_number: handoffPhone } : {}),
-              transfer_mode: handoffMode,
-            };
-          }
-          return { type: "system", name };
-        });
+      // Build built_in_tools object: enabled tools get a config object, disabled get null
+      const builtInTools: Record<string, unknown> = {};
+      for (const [name, enabled] of Object.entries(enabledTools)) {
+        if (!enabled) {
+          builtInTools[name] = null;
+        } else if (name === "transfer_to_number") {
+          // transfer_to_number requires a transfers array with phone_number and condition
+          builtInTools[name] = {
+            type: "system",
+            name,
+            description: "Transfer to a human operator",
+            params: {
+              system_tool_type: "transfer_to_number",
+              transfers: handoffPhone
+                ? [
+                    {
+                      phone_number: handoffPhone,
+                      condition: handoffCondition || "When the user requests to speak with a human agent",
+                    },
+                  ]
+                : [],
+            },
+          };
+        } else {
+          builtInTools[name] = {
+            type: "system",
+            name,
+            description: "",
+            params: { system_tool_type: name },
+          };
+        }
+      }
 
       await updateAgent({
         conversation_config: {
           agent: {
             prompt: {
-              tools,
+              built_in_tools: builtInTools,
             },
           },
         } as AgentConfig["conversation_config"],
@@ -781,7 +799,7 @@ const AgentSettingsPage = ({ onBack }: AgentSettingsPageProps) => {
               {SYSTEM_TOOLS.map((tool) => {
                 const Icon = tool.icon;
                 const enabled = enabledTools[tool.id] ?? false;
-                const isHandoff = tool.id === "hand_off_to_human";
+                const isHandoff = tool.id === "transfer_to_number";
                 return (
                   <div key={tool.id} className="glass rounded-xl overflow-hidden">
                     <div className="p-3 flex items-center gap-3">
@@ -844,35 +862,20 @@ const AgentSettingsPage = ({ onBack }: AgentSettingsPageProps) => {
                           />
                         </div>
 
-                        {/* Transfer mode */}
+                        {/* Transfer condition */}
                         <div className="mt-3">
                           <label className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium mb-1.5 block">
-                            {t("agentSettings.tools.transferMode")}
+                            {t("agentSettings.tools.transferCondition")}
                           </label>
-                          <div className="flex gap-2">
-                            {(["cold", "warm"] as const).map((mode) => (
-                              <button
-                                key={mode}
-                                onClick={() => setHandoffMode(mode)}
-                                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
-                                  handoffMode === mode
-                                    ? "text-primary-foreground shadow-card"
-                                    : "glass text-muted-foreground hover:text-foreground"
-                                }`}
-                                style={
-                                  handoffMode === mode
-                                    ? { background: "var(--gradient-primary)" }
-                                    : undefined
-                                }
-                              >
-                                {t(`agentSettings.tools.${mode}Transfer`)}
-                              </button>
-                            ))}
-                          </div>
+                          <textarea
+                            value={handoffCondition}
+                            onChange={(e) => setHandoffCondition(e.target.value)}
+                            rows={2}
+                            placeholder={t("agentSettings.tools.transferConditionPlaceholder")}
+                            className="w-full px-3 py-2 rounded-lg bg-background/60 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 resize-none"
+                          />
                           <p className="text-[9px] text-muted-foreground mt-1.5">
-                            {handoffMode === "cold"
-                              ? t("agentSettings.tools.coldTransferDesc")
-                              : t("agentSettings.tools.warmTransferDesc")}
+                            {t("agentSettings.tools.transferConditionDesc")}
                           </p>
                         </div>
                       </motion.div>
