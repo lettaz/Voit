@@ -92,8 +92,13 @@ const Dashboard = () => {
 
       {/* Header */}
       <header className="relative z-30 flex items-center justify-between px-5 pt-5 pb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-lg font-bold text-foreground">VoIt</span>
+        <div className="flex items-center gap-2.5">
+          <img
+            src="/voit.png"
+            alt="VoiT Logo"
+            className="w-8 h-8 rounded-lg object-cover"
+          />
+          <span className="text-lg font-bold text-foreground">VoiT</span>
         </div>
         <SettingsDropdown />
       </header>

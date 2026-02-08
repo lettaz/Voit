@@ -72,14 +72,13 @@ const Sidebar = ({ open, onClose, activePage, onNavigate }: SidebarProps) => {
             <div className="relative z-10 flex flex-col h-full">
               <div className="flex items-center justify-between px-5 pt-6 pb-4">
                 <div className="flex items-center gap-2.5">
-                  <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center"
-                    style={{ background: "var(--gradient-primary)" }}
-                  >
-                    <PhoneCall className="w-4 h-4 text-primary-foreground" />
-                  </div>
+                  <img
+                    src="/voit.png"
+                    alt="VoiT Logo"
+                    className="w-9 h-9 rounded-xl object-cover"
+                  />
                   <span className="text-lg font-bold text-foreground">
-                    VoIt
+                    VoiT
                   </span>
                 </div>
                 <button

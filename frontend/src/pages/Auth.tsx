@@ -89,7 +89,12 @@ const Auth = () => {
       >
         {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-foreground">VoIt</h1>
+          <img
+            src="/voit.png"
+            alt="VoiT Logo"
+            className="w-16 h-16 mx-auto mb-3 rounded-2xl object-cover"
+          />
+          <h1 className="text-2xl font-bold text-foreground">VoiT</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {mode === "login" ? t("auth.welcomeBack") : t("auth.createAccount")}
           </p>

@@ -1,0 +1,33 @@
+# ============================================
+# Voit – Environment Variables
+# ============================================
+
+# ─── Convex ──────────────────────────────────
+CONVEX_DEPLOYMENT=dev:tame-crow-429
+CONVEX_URL=https://tame-crow-429.convex.cloud
+CONVEX_SITE_URL=https://tame-crow-429.convex.site
+
+# ─── Backend ─────────────────────────────────
+PORT=3088
+FRONTEND_URL=http://localhost:8080
+BETTER_AUTH_SECRET=dev-secret-change-in-production
+BETTER_AUTH_URL=http://localhost:3088
+
+# ─── Google OAuth ────────────────────────────
+GOOGLE_CLIENT_ID=JrSTJIjsIEfbWiltBkVFPLNqyCPYKtNYp3waVNYfrls=
+GOOGLE_CLIENT_SECRET=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
+
+# ─── ElevenLabs + Twilio ────────────────────
+ELEVENLABS_API_KEY=sk_fa4f2027a5a64ebc42a77cdb790930c571f08b7c4a94282b
+ELEVENLABS_AGENT_ID=agent_9601kgxx244je17apfkez5rckv2q
+# ELEVENLABS_VOICE_ID=
+ELEVENLABS_PHONE_NUMBER_ID=phnum_9901kgy1g927ez2b6ezr8ahy98xf
+ELEVENLABS_WEBHOOK_SECRET=85b0ba211e138329585ca398e1257a6fcedf242544c8f7047bd2ccc711f8be47
+API_URL=http://localhost:3088
+
+# ─── Firecrawl – Provider Discovery ─────────
+FIRECRAWL_API_KEY=fc-c2de23108e9d4d1b96cec1ba5013b652
+
+# ─── Debug Mode ──────────────────────────────
+DEBUG_MODE=true
+DEBUG_PHONE_NUMBER=+15551234567
