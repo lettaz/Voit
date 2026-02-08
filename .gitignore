@@ -25,6 +25,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+docs/cred.md
 *~
 
 # Debug logs
