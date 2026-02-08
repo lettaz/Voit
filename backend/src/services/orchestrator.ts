@@ -62,7 +62,7 @@ export interface BatchRecipient {
 export interface BatchCallPayload {
   call_name: string;
   agent_id: string;
-  phone_number_id: string;
+  agent_phone_number_id: string;
   recipients: BatchRecipient[];
 }
 
@@ -216,7 +216,7 @@ export async function launchCampaign(
   const payload: BatchCallPayload = {
     call_name: `Campaign ${campaignId.slice(0, 8)} - ${request.category}`,
     agent_id: getAgentId(),
-    phone_number_id: getPhoneNumberId(),
+    agent_phone_number_id: getPhoneNumberId(),
     recipients: batchRecipients,
   };
 
