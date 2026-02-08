@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 const VOICES = [
   { id: "rachel", name: "Rachel", desc: "Warm, professional" },
@@ -32,6 +33,7 @@ const SetupWizard = ({ onComplete, onSkip, initialStep = 0 }: SetupWizardProps) 
   const [step, setStep] = useState(initialStep);
   const { t } = useTranslation();
   const { isDark } = useTheme();
+  const { connectCalendar, calendarConnected } = useAuth();
 
   const localSettings = JSON.parse(
     localStorage.getItem("voit_agent_settings") || "{}"
@@ -173,21 +175,38 @@ const SetupWizard = ({ onComplete, onSkip, initialStep = 0 }: SetupWizardProps) 
               <p className="text-muted-foreground text-sm mb-8">
                 {t("wizard.calendarDesc")}
               </p>
-              <button
-                disabled
-                className="w-full py-3.5 rounded-xl text-sm font-medium glass text-muted-foreground border border-border/50 opacity-50 cursor-not-allowed mb-4"
-              >
-                {t("integrations.connect")}
-              </button>
-              <p className="text-[10px] text-muted-foreground mb-8">
-                {t("integrations.comingSoon")}
-              </p>
-              <button
-                onClick={handleSkipStep}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {t("wizard.skip")}
-              </button>
+              {calendarConnected ? (
+                <>
+                  <div className="w-full py-3.5 rounded-xl text-sm font-medium text-center text-primary bg-primary/10 border border-primary/20 mb-4 flex items-center justify-center gap-2">
+                    <Check className="w-4 h-4" />
+                    {t("integrations.calendarConnected")}
+                  </div>
+                  <button
+                    onClick={saveAndNext}
+                    className="w-full py-3.5 rounded-xl text-sm font-semibold text-primary-foreground hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+                    style={{ background: "var(--gradient-primary)" }}
+                  >
+                    {t("wizard.continue")}
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={connectCalendar}
+                    className="w-full py-3.5 rounded-xl text-sm font-semibold text-primary-foreground hover:opacity-90 transition-opacity mb-4"
+                    style={{ background: "var(--gradient-primary)" }}
+                  >
+                    {t("integrations.connect")}
+                  </button>
+                  <button
+                    onClick={handleSkipStep}
+                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {t("wizard.skip")}
+                  </button>
+                </>
+              )}
             </motion.div>
           )}
 

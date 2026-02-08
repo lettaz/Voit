@@ -153,6 +153,7 @@
     "comingSoon": "Demnächst verfügbar",
     "active": "Aktiv",
     "connected": "Verbunden",
+    "calendarConnected": "Google Kalender verbunden",
     "notConnected": "Nicht verbunden",
     "voiceLabel": "Agenten-Stimme",
     "humanHandoff": "Weiterleitung an Mensch",

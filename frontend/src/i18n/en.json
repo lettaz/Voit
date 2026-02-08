@@ -153,6 +153,7 @@
     "comingSoon": "Coming Soon",
     "active": "Active",
     "connected": "Connected",
+    "calendarConnected": "Google Calendar connected",
     "notConnected": "Not Connected",
     "voiceLabel": "Agent Voice",
     "humanHandoff": "Human Handoff",

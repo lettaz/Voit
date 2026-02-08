@@ -73,6 +73,25 @@ export const upsertFromAuth = mutation({
   },
 });
 
+/** Store Google Calendar OAuth tokens for a user. */
+export const updateCalendarTokens = mutation({
+  args: {
+    id: v.id("users"),
+    calendarTokens: v.object({
+      accessToken: v.string(),
+      refreshToken: v.string(),
+      expiresAt: v.number(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      calendarConnected: true,
+      calendarTokens: args.calendarTokens,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 export const updatePreferences = mutation({
   args: {
     id: v.id("users"),

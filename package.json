@@ -8,7 +8,8 @@
     "dev:convex": "npx convex dev",
     "dev:frontend": "pnpm --filter frontend dev",
     "dev:backend": "pnpm --filter backend dev",
-    "seed": "pnpm --filter backend seed"
+    "seed": "pnpm --filter backend seed",
+    "test:calendar": "npx tsx scripts/testCalendar.ts"
   },
   "dependencies": {
     "@convex-dev/better-auth": "^0.10.10",
@@ -16,7 +17,10 @@
     "convex": "^1.21.0"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "dotenv": "^17.2.4",
+    "googleapis": "^171.4.0",
+    "tsx": "^4.21.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

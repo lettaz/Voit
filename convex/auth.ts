@@ -16,6 +16,21 @@ export const createAuth: CreateAuth<DataModel> = (ctx) => {
       google: {
         clientId: process.env.GOOGLE_CLIENT_ID as string,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+        scope: [
+          "openid",
+          "email",
+          "profile",
+          "https://www.googleapis.com/auth/calendar.readonly",
+          "https://www.googleapis.com/auth/calendar.events",
+        ],
+        accessType: "offline",
+        prompt: "consent",
+      },
+    },
+    account: {
+      accountLinking: {
+        enabled: true,
+        allowDifferentEmails: true,
       },
     },
     emailAndPassword: {
