@@ -15,6 +15,7 @@
 import FirecrawlApp from "@mendable/firecrawl-js";
 import {
   searchNearbyProviders as googleSearchNearby,
+  textSearchProviders as googleTextSearch,
   getPlaceDetails as googleGetPlaceDetails,
   calculateDistance as googleCalculateDistance,
   resolveGooglePlacesType,
@@ -134,22 +135,44 @@ export async function discoverProviders(
   );
   const hasLocation = options.lat !== undefined && options.lng !== undefined;
 
-  if (hasGoogleMapsKey && hasLocation) {
+  if (hasGoogleMapsKey) {
     try {
-      const placesType = resolveGooglePlacesType(options.category);
       const radius = options.radiusMeters || 5000;
+      let places: PlaceSearchResult[] = [];
 
-      console.log(
-        `[ProviderDiscovery] Searching Google Places: type="${placesType}" at (${options.lat}, ${options.lng})`
-      );
+      // Use Text Search with the raw user query — Google understands natural language
+      // This is far superior to keyword-based category → type mapping
+      const rawQuery = options.query || options.category;
 
-      const places = await googleSearchNearby(
-        options.lat!,
-        options.lng!,
-        radius,
-        placesType,
-        limit
-      );
+      if (rawQuery && rawQuery !== "general") {
+        console.log(
+          `[ProviderDiscovery] Text Search: "${rawQuery}"${hasLocation ? ` near (${options.lat}, ${options.lng})` : ""}`
+        );
+
+        places = await googleTextSearch(
+          rawQuery,
+          hasLocation ? options.lat : undefined,
+          hasLocation ? options.lng : undefined,
+          radius,
+          limit
+        );
+      }
+
+      // Fallback to Nearby Search if Text Search returned nothing and we have a known category
+      if (places.length === 0 && hasLocation) {
+        const placesType = resolveGooglePlacesType(options.category);
+        console.log(
+          `[ProviderDiscovery] Fallback to Nearby Search: type="${placesType}" at (${options.lat}, ${options.lng})`
+        );
+
+        places = await googleSearchNearby(
+          options.lat!,
+          options.lng!,
+          radius,
+          placesType,
+          limit
+        );
+      }
 
       if (places.length > 0) {
         // Fetch details for each place (phone, hours, website)

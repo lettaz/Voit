@@ -54,7 +54,7 @@ const CampaignFlow = ({ state, onStateChange, onClose }: CampaignFlowProps) => {
             lat,
             lng,
             limit: 10,
-            query: intent.specifics,
+            query: intent.raw, // Send full raw user input — Google Text Search understands natural language
           }),
         });
 

@@ -60,17 +60,17 @@ export interface BatchRecipient {
 }
 
 export interface BatchCallPayload {
-  // New camelCase API fields
-  callName: string;
-  agentId: string;
-  phoneNumberId: string;
+  call_name: string;
+  agent_id: string;
+  phone_number_id: string;
   recipients: BatchRecipient[];
 }
 
 export interface BatchStatusResponse {
-  id: string;
-  batch_call_id?: string; // Legacy field
+  batch_call_id?: string;
+  id?: string;
   status: string;
+  created_at?: string;
   created_at_unix?: number;
   total_calls_dispatched?: number;
   total_calls_finished?: number;
@@ -214,9 +214,9 @@ export async function launchCampaign(
   }));
 
   const payload: BatchCallPayload = {
-    callName: `Campaign ${campaignId.slice(0, 8)} - ${request.category}`,
-    agentId: getAgentId(),
-    phoneNumberId: getPhoneNumberId(),
+    call_name: `Campaign ${campaignId.slice(0, 8)} - ${request.category}`,
+    agent_id: getAgentId(),
+    phone_number_id: getPhoneNumberId(),
     recipients: batchRecipients,
   };
 

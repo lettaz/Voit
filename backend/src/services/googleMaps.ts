@@ -292,3 +292,82 @@ export async function getPlaceDetails(
 export function resolveGooglePlacesType(category: string): string {
   return CATEGORY_TYPE_MAP[category.toLowerCase()] || category;
 }
+
+// ─── Text Search (natural language) ─────────────────────────────────────────
+
+/**
+ * Search for places using a natural language query (e.g. "Baba's restaurant near me").
+ * This is more flexible than Nearby Search because Google interprets the query itself.
+ * Location bias is applied via lat/lng but the query drives the results.
+ */
+export async function textSearchProviders(
+  query: string,
+  lat?: number,
+  lng?: number,
+  radiusMeters: number = 5000,
+  maxResults: number = 10
+): Promise<PlaceSearchResult[]> {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    console.log("[GoogleMaps] No API key configured, cannot text search");
+    return [];
+  }
+
+  const url = new URL(
+    "https://maps.googleapis.com/maps/api/place/textsearch/json"
+  );
+  url.searchParams.set("query", query);
+  if (lat !== undefined && lng !== undefined) {
+    url.searchParams.set("location", `${lat},${lng}`);
+    url.searchParams.set("radius", String(radiusMeters));
+  }
+  url.searchParams.set("key", apiKey);
+
+  try {
+    console.log(
+      `[GoogleMaps] Text Search: "${query}"${lat ? ` near (${lat}, ${lng})` : ""} radius=${radiusMeters}m`
+    );
+
+    const res = await fetch(url.toString());
+    const data = (await res.json()) as {
+      status: string;
+      error_message?: string;
+      results?: Array<{
+        place_id: string;
+        name: string;
+        formatted_address: string;
+        geometry: { location: { lat: number; lng: number } };
+        rating?: number;
+        user_ratings_total?: number;
+        opening_hours?: { open_now?: boolean };
+        types?: string[];
+      }>;
+    };
+
+    if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+      console.error(
+        `[GoogleMaps] Text Search error: ${data.status} - ${data.error_message || ""}`
+      );
+      return [];
+    }
+
+    const results = (data.results || []).slice(0, maxResults);
+
+    console.log(`[GoogleMaps] Text Search found ${results.length} results`);
+
+    return results.map((place) => ({
+      placeId: place.place_id,
+      name: place.name,
+      address: place.formatted_address || "",
+      lat: place.geometry.location.lat,
+      lng: place.geometry.location.lng,
+      rating: place.rating ?? null,
+      reviewCount: place.user_ratings_total ?? null,
+      openNow: place.opening_hours?.open_now ?? null,
+      types: place.types || [],
+    }));
+  } catch (error) {
+    console.error("[GoogleMaps] Text Search failed:", error);
+    return [];
+  }
+}
