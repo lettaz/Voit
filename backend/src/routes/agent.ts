@@ -289,7 +289,7 @@ export async function agentRoutes(app: FastifyInstance) {
         return reply.status(res.status).send({ error: "Failed to upload document", details: err });
       }
 
-      const result = await res.json();
+      const result = (await res.json()) as { id: string; [key: string]: unknown };
 
       // Auto-link the document to the agent
       const agentId = getAgentId();
@@ -299,7 +299,8 @@ export async function agentRoutes(app: FastifyInstance) {
           headers: getHeaders(),
         });
         if (agentRes.ok) {
-          const agent = await agentRes.json();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const agent = (await agentRes.json()) as Record<string, any>;
           const existingDocs =
             agent.conversation_config?.agent?.prompt?.knowledge_base || [];
           const docIds = existingDocs.map((d: { id: string }) => d.id);
@@ -356,7 +357,8 @@ export async function agentRoutes(app: FastifyInstance) {
           headers: getHeaders(),
         });
         if (agentRes.ok) {
-          const agent = await agentRes.json();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const agent = (await agentRes.json()) as Record<string, any>;
           const existingDocs: { id: string; type: string }[] =
             agent.conversation_config?.agent?.prompt?.knowledge_base || [];
           const filtered = existingDocs.filter((d) => d.id !== docId);
