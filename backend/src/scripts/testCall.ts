@@ -183,8 +183,8 @@ async function main() {
           `  [${elapsed}s] Batch status: ${status.status}`
         );
 
-        if (status.recipients) {
-          for (const r of status.recipients) {
+        if ((status as unknown as Record<string, unknown>).recipients) {
+          for (const r of (status as unknown as Record<string, unknown>).recipients as Array<Record<string, string>>) {
             console.log(
               `    Recipient ${r.phone_number}: ${r.status}${r.call_id ? ` (call: ${r.call_id})` : ""}`
             );

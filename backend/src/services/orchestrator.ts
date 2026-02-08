@@ -47,30 +47,33 @@ export interface LaunchCampaignParams {
 
 export interface BatchRecipient {
   phone_number: string;
-  name: string;
-  custom_variables: Record<string, string>;
+  name?: string;
+  conversation_initiation_client_data?: {
+    conversation_config_override?: {
+      agent?: {
+        prompt?: { prompt?: string };
+        first_message?: string;
+      };
+    };
+  };
+  custom_variables?: Record<string, string>;
 }
 
 export interface BatchCallPayload {
-  agent_id: string;
-  phone_number_id: string;
-  call_name: string;
+  // New camelCase API fields
+  callName: string;
+  agentId: string;
+  phoneNumberId: string;
   recipients: BatchRecipient[];
-  system_prompt?: string;
-  first_message?: string;
 }
 
 export interface BatchStatusResponse {
-  batch_call_id: string;
+  id: string;
+  batch_call_id?: string; // Legacy field
   status: string;
-  created_at: string;
-  completed_at?: string;
-  recipients: Array<{
-    phone_number: string;
-    status: string;
-    call_id?: string;
-    conversation_id?: string;
-  }>;
+  created_at_unix?: number;
+  total_calls_dispatched?: number;
+  total_calls_finished?: number;
 }
 
 // ─── Config ─────────────────────────────────────────────────────────────────
@@ -195,21 +198,33 @@ export async function launchCampaign(
   };
   });
 
+  // Build recipients with per-recipient prompt/first_message overrides
+  const batchRecipients: BatchRecipient[] = recipients.map((r) => ({
+    phone_number: r.phone_number,
+    name: r.name,
+    conversation_initiation_client_data: {
+      conversation_config_override: {
+        agent: {
+          prompt: { prompt: systemPrompt },
+          first_message: getFirstMessage(),
+        },
+      },
+    },
+    custom_variables: r.custom_variables,
+  }));
+
   const payload: BatchCallPayload = {
-    agent_id: getAgentId(),
-    phone_number_id: getPhoneNumberId(),
-    call_name: `Campaign ${campaignId.slice(0, 8)} - ${request.category}`,
-    recipients,
-    // Override system prompt and first message with our composed templates
-    system_prompt: systemPrompt,
-    first_message: getFirstMessage(),
+    callName: `Campaign ${campaignId.slice(0, 8)} - ${request.category}`,
+    agentId: getAgentId(),
+    phoneNumberId: getPhoneNumberId(),
+    recipients: batchRecipients,
   };
 
   console.log(
-    `[Orchestrator] Submitting batch with ${recipients.length} recipients (agent_name="${agentName}")`
+    `[Orchestrator] Submitting batch with ${batchRecipients.length} recipients (agent_name="${agentName}")`
   );
 
-  const response = await elevenLabsFetch<{ batch_call_id: string }>(
+  const response = await elevenLabsFetch<{ id?: string; batch_call_id?: string }>(
     "/v1/convai/batch-calling/submit",
     {
       method: "POST",
@@ -217,11 +232,13 @@ export async function launchCampaign(
     }
   );
 
+  const batchId = response.id || response.batch_call_id || "unknown";
+
   console.log(
-    `[Orchestrator] Batch submitted: ${response.batch_call_id}`
+    `[Orchestrator] Batch submitted: ${batchId}`
   );
 
-  return { batchId: response.batch_call_id };
+  return { batchId };
 }
 
 /**
