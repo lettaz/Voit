@@ -1,20 +1,24 @@
 import { useState, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import HeroCard from "./HeroCard";
 import CallsPage from "./CallsPage";
 import AppointmentsSection from "./AppointmentsSection";
+import IntegrationsPage from "./IntegrationsPage";
 import BottomNav from "./BottomNav";
 import SettingsDropdown from "./SettingsDropdown";
+import ThemeToggle from "./ThemeToggle";
 import CampaignFlow, { type CampaignFlowState } from "./CampaignFlow";
 import CampaignProgress from "./CampaignProgress";
 import CampaignResults from "./CampaignResults";
-import ProfilePage from "./ProfilePage";
+import SetupWizard from "./SetupWizard";
+import AgentSettingsPage from "./AgentSettingsPage";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import type { Id } from "@convex/_generated/dataModel";
+import { X, Sparkles, Bot, ChevronRight } from "lucide-react";
 
 const useGreeting = () => {
   const { t } = useTranslation();
@@ -29,7 +33,12 @@ const Dashboard = () => {
   const [campaignState, setCampaignState] = useState<CampaignFlowState | null>(null);
   const [viewCampaignId, setViewCampaignId] = useState<Id<"campaigns"> | null>(null);
   const [viewCampaignStep, setViewCampaignStep] = useState<"progress" | "results">("progress");
-  const [showProfile, setShowProfile] = useState(false);
+  const [showAgentSettings, setShowAgentSettings] = useState(false);
+
+  // Onboarding state
+  const onboardingCompleted = localStorage.getItem("voit_onboarding_completed") === "true";
+  const [showWizard, setShowWizard] = useState(!onboardingCompleted);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   const { user, convexUserId } = useAuth();
   const { isDark } = useTheme();
@@ -43,6 +52,9 @@ const Dashboard = () => {
     convexUserId ? { userId: convexUserId } : "skip"
   );
 
+  // Show onboarding badge on integrations tab if not completed
+  const showIntegrationsBadge = !onboardingCompleted && !showWizard;
+
   // Campaign creation from HeroCard
   const handleHeroSubmit = useCallback((input: string) => {
     setCampaignState({ step: "parsing", input });
@@ -53,6 +65,37 @@ const Dashboard = () => {
     setViewCampaignId(id);
     setViewCampaignStep(step || "progress");
   }, []);
+
+  // Wizard handlers
+  const handleWizardComplete = () => {
+    setShowWizard(false);
+  };
+
+  const handleWizardSkip = () => {
+    localStorage.setItem("voit_onboarding_step", "0");
+    setShowWizard(false);
+  };
+
+  const handleReopenWizard = () => {
+    setShowWizard(true);
+  };
+
+  // Agent settings full-page overlay
+  if (showAgentSettings) {
+    return <AgentSettingsPage onBack={() => setShowAgentSettings(false)} />;
+  }
+
+  // Setup wizard overlay
+  if (showWizard) {
+    const lastStep = Number(localStorage.getItem("voit_onboarding_step") || "0");
+    return (
+      <SetupWizard
+        onComplete={handleWizardComplete}
+        onSkip={handleWizardSkip}
+        initialStep={lastStep}
+      />
+    );
+  }
 
   // Campaign flow overlay
   if (campaignState) {
@@ -82,11 +125,6 @@ const Dashboard = () => {
         onViewResults={() => setViewCampaignStep("results")}
       />
     );
-  }
-
-  // Profile page
-  if (showProfile) {
-    return <ProfilePage onBack={() => setShowProfile(false)} />;
   }
 
   return (
@@ -127,16 +165,51 @@ const Dashboard = () => {
         }}
       />
 
-      {/* Header */}
+      {/* Header: Logo | ThemeToggle | AvatarMenu */}
       <header className="relative z-30 flex items-center justify-between px-5 pt-5 pb-2">
         <div className="flex items-center gap-2">
+          <img src="/voit.png" alt="Voit" className="w-7 h-7" />
           <span className="text-lg font-bold text-foreground">Voit</span>
         </div>
-        <SettingsDropdown onProfile={() => setShowProfile(true)} />
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <SettingsDropdown />
+        </div>
       </header>
 
+      {/* Onboarding reminder banner */}
+      <AnimatePresence>
+        {!onboardingCompleted && !bannerDismissed && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="relative z-20 mx-5 mb-2"
+          >
+            <div className="glass rounded-xl p-3 flex items-center gap-3 border border-primary/20">
+              <Sparkles className="w-4 h-4 text-primary shrink-0" />
+              <p className="text-xs text-foreground flex-1">
+                {t("wizard.bannerText")}
+                <button
+                  onClick={handleReopenWizard}
+                  className="ml-1 text-primary font-semibold hover:underline"
+                >
+                  {t("wizard.completeSetup")}
+                </button>
+              </p>
+              <button
+                onClick={() => setBannerDismissed(true)}
+                className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Content */}
-      <main className="relative z-10 px-5 pt-6 pb-24">
+      <main className="relative z-10 px-5 pt-4 pb-24">
         {activePage === "dashboard" && (
           <>
             {/* Greeting */}
@@ -203,6 +276,37 @@ const Dashboard = () => {
                 </div>
               ))}
             </motion.div>
+
+            {/* Agent setup CTA card */}
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.25 }}
+              className="mt-4"
+            >
+              <button
+                onClick={() => setShowAgentSettings(true)}
+                className="w-full glass-accent rounded-2xl p-4 shadow-card gradient-border text-left group hover:shadow-lg transition-shadow"
+              >
+                <div className="flex items-center gap-4">
+                  <div
+                    className="w-12 h-12 rounded-xl flex items-center justify-center text-primary-foreground shrink-0"
+                    style={{ background: "var(--gradient-primary)" }}
+                  >
+                    <Bot className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-foreground text-sm">
+                      {t("dashboard.agentCardTitle")}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {t("dashboard.agentCardDesc")}
+                    </p>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+                </div>
+              </button>
+            </motion.div>
           </>
         )}
 
@@ -227,10 +331,16 @@ const Dashboard = () => {
             </div>
           </motion.div>
         )}
+
+        {activePage === "integrations" && <IntegrationsPage />}
       </main>
 
       {/* Bottom Navigation */}
-      <BottomNav activePage={activePage} onNavigate={setActivePage} />
+      <BottomNav
+        activePage={activePage}
+        onNavigate={setActivePage}
+        showIntegrationsBadge={showIntegrationsBadge}
+      />
     </div>
   );
 };

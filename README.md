@@ -246,8 +246,11 @@ pnpm --filter backend run test:call
 | `src/components/CallsPage.tsx` | Active/past agent calls list |
 | `src/components/ActiveCall.tsx` | Fullscreen live call view with transcript |
 | `src/components/AppointmentsSection.tsx` | Upcoming/past appointments |
-| `src/components/BottomNav.tsx` | Bottom tab bar (Home, Calls, Appointments) |
-| `src/components/SettingsDropdown.tsx` | User menu (theme, language, logout) |
+| `src/components/BottomNav.tsx` | Bottom tab bar (Home, Calls, Appointments, Integrations) |
+| `src/components/SettingsDropdown.tsx` | User avatar menu (language toggle, sign out) |
+| `src/components/ThemeToggle.tsx` | Sun/moon theme toggle in header |
+| `src/components/IntegrationsPage.tsx` | Service connections + agent setup (voice, handoff) |
+| `src/components/SetupWizard.tsx` | First-time onboarding flow (5 steps) |
 | `src/contexts/AuthContext.tsx` | Auth state + Convex user sync |
 | `src/contexts/ThemeContext.tsx` | Dark/light mode |
 | `src/i18n/` | English and German translations |
@@ -302,6 +305,43 @@ pnpm --filter backend run test:call
 - **Metadata fields** -- every Convex table has an optional `metadata` field for extensibility without schema changes.
 - **Auth proxy** -- the frontend proxies `/api/auth/*` to Convex (for same-origin cookies) and `/api/*` to Fastify. In production, Vercel rewrites handle this (see `frontend/vercel.json`).
 - **Mock fallbacks** -- `check_calendar` and `calculate_distance` tools return mock data until Google APIs are integrated. Firecrawl falls back to realistic mock providers if no API key is set.
+
+---
+
+## Roadmap
+
+Features planned for future iterations:
+
+### Per-User Agent Creation
+Each user will be able to create and customize their own ElevenLabs voice agent via the Agent API (`POST /v1/convai/agents`). This includes:
+- Selecting from the full ElevenLabs voice library or cloning their own voice
+- Uploading a personal Knowledge Base (insurance details, dietary needs, medical info) via the ElevenLabs KB API
+- Per-agent system prompt customization
+- Individual Twilio number assignment per user
+
+### Full Google Calendar Integration
+- OAuth2 flow to connect Google Calendar
+- Real-time calendar availability checks during calls (replacing the current mock `check_calendar` tool)
+- Automatic event creation when an appointment is booked
+- Double-booking prevention
+
+### Google Maps / Places API
+- Auto-detect user location via browser geolocation
+- Real distance/travel time calculations via Distance Matrix API (replacing the mock `calculate_distance` tool)
+- Provider search enrichment via Places API (ratings, hours, photos)
+
+### PWA Conversion
+- Service worker for offline support
+- Native splash screens and app icons
+- Push notifications for call completion, appointment confirmations, and campaign results
+- Add-to-homescreen prompt
+
+### Advanced Agent Features
+- Live user-in-the-loop: real-time transcript streaming with user intervention/override
+- Domain expert routing: specialized sub-agents for health, automotive, dining
+- Waitlist & callback intelligence: register on provider waitlists with automatic retry
+- Rescheduling & cancellation agent: manage existing bookings autonomously
+- Multilingual auto-detection and seamless language switching mid-call
 
 ---
 

@@ -12,10 +12,12 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
+import multipart from "@fastify/multipart";
 import { ConvexHttpClient } from "convex/browser";
 import { providerRoutes } from "./routes/providers.js";
 import { toolRoutes } from "./routes/tools.js";
 import { campaignRoutes } from "./routes/campaigns.js";
+import { agentRoutes } from "./routes/agent.js";
 
 const PORT = Number(process.env.PORT) || 3088;
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:8080";
@@ -58,6 +60,13 @@ await app.register(rateLimit, {
   timeWindow: "1 minute",
 });
 
+await app.register(multipart, {
+  limits: {
+    fileSize: 25 * 1024 * 1024, // 25 MB
+    files: 1,
+  },
+});
+
 // --- Routes ---
 app.get("/api/health", async (_request, _reply) => {
   return {
@@ -82,6 +91,9 @@ await toolRoutes(app, convex);
 
 // Campaign management routes
 await campaignRoutes(app, convex);
+
+// Agent configuration routes (ElevenLabs API proxy)
+await agentRoutes(app);
 
 // --- Start ---
 const start = async () => {

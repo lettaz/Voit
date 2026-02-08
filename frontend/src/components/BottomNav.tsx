@@ -1,4 +1,4 @@
-import { Home, PhoneCall, Calendar } from "lucide-react";
+import { Home, PhoneCall, Calendar, Puzzle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -6,9 +6,10 @@ import { useTheme } from "@/contexts/ThemeContext";
 interface BottomNavProps {
   activePage: string;
   onNavigate: (page: string) => void;
+  showIntegrationsBadge?: boolean;
 }
 
-const BottomNav = ({ activePage, onNavigate }: BottomNavProps) => {
+const BottomNav = ({ activePage, onNavigate, showIntegrationsBadge }: BottomNavProps) => {
   const { isDark } = useTheme();
   const { t } = useTranslation();
 
@@ -16,6 +17,7 @@ const BottomNav = ({ activePage, onNavigate }: BottomNavProps) => {
     { id: "dashboard", label: t("nav.home"), icon: Home },
     { id: "calls", label: t("nav.calls"), icon: PhoneCall },
     { id: "calendar", label: t("nav.appointments"), icon: Calendar },
+    { id: "integrations", label: t("nav.integrations"), icon: Puzzle },
   ];
 
   return (
@@ -35,15 +37,16 @@ const BottomNav = ({ activePage, onNavigate }: BottomNavProps) => {
           : "0 -4px 30px hsl(142 50% 40% / 0.06)",
       }}
     >
-      <div className="flex items-center justify-around px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <div className="flex items-center justify-around px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activePage === tab.id;
+          const showBadge = tab.id === "integrations" && showIntegrationsBadge;
           return (
             <button
               key={tab.id}
               onClick={() => onNavigate(tab.id)}
-              className="flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-colors relative"
+              className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors relative"
             >
               {isActive && (
                 <motion.div
@@ -56,11 +59,19 @@ const BottomNav = ({ activePage, onNavigate }: BottomNavProps) => {
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 />
               )}
-              <Icon
-                className={`w-5 h-5 relative z-10 transition-colors ${
-                  isActive ? "text-primary" : "text-muted-foreground"
-                }`}
-              />
+              <div className="relative">
+                <Icon
+                  className={`w-5 h-5 relative z-10 transition-colors ${
+                    isActive ? "text-primary" : "text-muted-foreground"
+                  }`}
+                />
+                {showBadge && (
+                  <span
+                    className="absolute -top-1 -right-1.5 w-2.5 h-2.5 rounded-full z-20"
+                    style={{ background: "hsl(142 70% 45%)" }}
+                  />
+                )}
+              </div>
               <span
                 className={`text-[10px] font-medium relative z-10 transition-colors ${
                   isActive ? "text-primary" : "text-muted-foreground"
