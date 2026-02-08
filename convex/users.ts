@@ -92,6 +92,34 @@ export const updateCalendarTokens = mutation({
   },
 });
 
+/** Update the user's agent name (used as {{agent_name}} in prompts). */
+export const updateAgentName = mutation({
+  args: {
+    id: v.id("users"),
+    agentName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      agentName: args.agentName,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+/** Update the user's custom prompt (appended to base prompt). */
+export const updateCustomPrompt = mutation({
+  args: {
+    id: v.id("users"),
+    customPrompt: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      customPrompt: args.customPrompt,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 export const updatePreferences = mutation({
   args: {
     id: v.id("users"),

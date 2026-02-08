@@ -3,22 +3,71 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Calendar,
   MapPin,
-  Volume2,
-  PhoneForwarded,
   Check,
   ChevronRight,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
 
-const VOICES = [
-  { id: "rachel", name: "Rachel", desc: "Warm, professional" },
-  { id: "josh", name: "Josh", desc: "Friendly, casual" },
-  { id: "aria", name: "Aria", desc: "Clear, confident" },
-  { id: "marcus", name: "Marcus", desc: "Deep, authoritative" },
-  { id: "sarah", name: "Sarah", desc: "Calm, empathetic" },
-  { id: "adam", name: "Adam", desc: "Energetic, upbeat" },
+// Agent personas — each is a personality archetype linked to a voice preset.
+// The customPrompt gives users a head start with instructions tailored to the persona.
+const AGENT_PERSONAS = [
+  {
+    id: "professional",
+    name: "Professional",
+    voiceId: "rachel",
+    emoji: "👔",
+    desc: "Formal, precise, corporate tone",
+    customPrompt:
+      "Maintain a formal and business-like tone at all times. Use precise language. Address the provider respectfully and get straight to the point.",
+  },
+  {
+    id: "friendly",
+    name: "Friendly",
+    voiceId: "josh",
+    emoji: "😊",
+    desc: "Warm, casual, approachable",
+    customPrompt:
+      "Be warm, conversational, and approachable. Use a friendly tone and don't be afraid to be personable. Make the provider feel comfortable.",
+  },
+  {
+    id: "efficient",
+    name: "Efficient",
+    voiceId: "aria",
+    emoji: "⚡",
+    desc: "Fast, direct, no fluff",
+    customPrompt:
+      "Be extremely concise and efficient. Get to the point quickly. Minimize small talk. Aim to complete every call in under 2 minutes.",
+  },
+  {
+    id: "empathetic",
+    name: "Empathetic",
+    voiceId: "sarah",
+    emoji: "💚",
+    desc: "Caring, patient, understanding",
+    customPrompt:
+      "Be patient and understanding. Show empathy when the provider is busy or cannot accommodate. Thank them sincerely. Take your time to listen.",
+  },
+  {
+    id: "multilingual",
+    name: "Multilingual",
+    voiceId: "aria",
+    emoji: "🌍",
+    desc: "Adapts to provider's language",
+    customPrompt:
+      "Prioritize language detection. If the provider speaks a language other than English, switch immediately and continue in their language. Be culturally aware and adapt your tone accordingly.",
+  },
+  {
+    id: "custom",
+    name: "Custom",
+    voiceId: "rachel",
+    emoji: "✏️",
+    desc: "Start from scratch",
+    customPrompt: "",
+  },
 ];
 
 interface SetupWizardProps {
@@ -35,21 +84,39 @@ const SetupWizard = ({ onComplete, onSkip, initialStep = 0 }: SetupWizardProps) 
   const { isDark } = useTheme();
   const { connectCalendar, calendarConnected } = useAuth();
 
+  const { convexUserId } = useAuth();
+  const updateAgentName = useMutation(api.users.updateAgentName);
+  const updateCustomPrompt = useMutation(api.users.updateCustomPrompt);
+
   const localSettings = JSON.parse(
     localStorage.getItem("voit_agent_settings") || "{}"
   );
-  const [selectedVoice, setSelectedVoice] = useState(localSettings.voiceId || "rachel");
-  const [humanHandoff, setHumanHandoff] = useState(localSettings.humanHandoff ?? false);
+  const [selectedPersona, setSelectedPersona] = useState(localSettings.personaId || "professional");
 
-  const saveAndNext = () => {
-    // Persist agent settings at step 3
+  const saveAndNext = async () => {
+    // Persist agent persona at step 3
     if (step === 3) {
+      const persona = AGENT_PERSONAS.find((p) => p.id === selectedPersona);
       const stored = JSON.parse(
         localStorage.getItem("voit_agent_settings") || "{}"
       );
-      stored.voiceId = selectedVoice;
-      stored.humanHandoff = humanHandoff;
+      stored.personaId = selectedPersona;
+      stored.voiceId = persona?.voiceId || "rachel";
       localStorage.setItem("voit_agent_settings", JSON.stringify(stored));
+
+      // Save persona's custom prompt and agent name to Convex
+      if (convexUserId && persona) {
+        try {
+          if (persona.customPrompt) {
+            await updateCustomPrompt({
+              id: convexUserId,
+              customPrompt: persona.customPrompt,
+            });
+          }
+        } catch (err) {
+          console.error("Failed to save persona to Convex:", err);
+        }
+      }
     }
 
     if (step < TOTAL_STEPS - 1) {
@@ -248,7 +315,7 @@ const SetupWizard = ({ onComplete, onSkip, initialStep = 0 }: SetupWizardProps) 
             </motion.div>
           )}
 
-          {/* ── Step 3: Agent Setup ── */}
+          {/* ── Step 3: Agent Persona Selector ── */}
           {step === 3 && (
             <motion.div
               key="agent"
@@ -268,20 +335,16 @@ const SetupWizard = ({ onComplete, onSkip, initialStep = 0 }: SetupWizardProps) 
                 </p>
               </div>
 
-              {/* Voice picker */}
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium mb-2.5 flex items-center gap-1.5">
-                <Volume2 className="w-3 h-3" />
-                {t("integrations.voiceLabel")}
-              </p>
-              <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide mb-5">
-                {VOICES.map((voice) => {
-                  const isSelected = selectedVoice === voice.id;
+              {/* Persona grid */}
+              <div className="grid grid-cols-2 gap-2.5 mb-6">
+                {AGENT_PERSONAS.map((persona) => {
+                  const isSelected = selectedPersona === persona.id;
                   return (
                     <button
-                      key={voice.id}
-                      onClick={() => setSelectedVoice(voice.id)}
-                      className={`shrink-0 w-[88px] rounded-xl p-3 text-center transition-all ${
-                        isSelected ? "shadow-card" : "glass opacity-70 hover:opacity-100"
+                      key={persona.id}
+                      onClick={() => setSelectedPersona(persona.id)}
+                      className={`rounded-xl p-3.5 text-left transition-all relative ${
+                        isSelected ? "shadow-card" : "glass opacity-80 hover:opacity-100"
                       }`}
                       style={
                         isSelected
@@ -294,51 +357,34 @@ const SetupWizard = ({ onComplete, onSkip, initialStep = 0 }: SetupWizardProps) 
                           : undefined
                       }
                     >
-                      <div
-                        className="w-8 h-8 rounded-full mx-auto mb-1.5 flex items-center justify-center text-[10px] font-bold text-primary-foreground"
-                        style={{ background: "var(--gradient-primary)" }}
-                      >
-                        {voice.name[0]}
-                      </div>
-                      <p className="text-xs font-semibold text-foreground">{voice.name}</p>
-                      <p className="text-[9px] text-muted-foreground mt-0.5 leading-tight">
-                        {voice.desc}
+                      <span className="text-2xl mb-2 block">{persona.emoji}</span>
+                      <p className="text-sm font-semibold text-foreground">
+                        {persona.name}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+                        {persona.desc}
                       </p>
                       {isSelected && (
-                        <Check className="w-3 h-3 text-primary mx-auto mt-1" />
+                        <div className="absolute top-2.5 right-2.5">
+                          <Check className="w-4 h-4 text-primary" />
+                        </div>
                       )}
                     </button>
                   );
                 })}
               </div>
 
-              {/* Human handoff toggle */}
-              <div className="flex items-center justify-between glass rounded-xl p-3 mb-8">
-                <div className="flex items-center gap-3">
-                  <PhoneForwarded className="w-4 h-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {t("integrations.humanHandoff")}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {t("integrations.humanHandoffDesc")}
-                    </p>
-                  </div>
+              {/* Selected persona preview */}
+              {selectedPersona && selectedPersona !== "custom" && (
+                <div className="glass rounded-xl p-3 mb-6">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium mb-1.5">
+                    {t("wizard.personaPreview")}
+                  </p>
+                  <p className="text-xs text-foreground/80 leading-relaxed italic">
+                    "{AGENT_PERSONAS.find((p) => p.id === selectedPersona)?.customPrompt}"
+                  </p>
                 </div>
-                <button
-                  onClick={() => setHumanHandoff(!humanHandoff)}
-                  className={`w-11 h-6 rounded-full transition-all relative ${
-                    humanHandoff ? "" : "bg-muted"
-                  }`}
-                  style={humanHandoff ? { background: "var(--gradient-primary)" } : undefined}
-                >
-                  <motion.div
-                    className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm"
-                    animate={{ left: humanHandoff ? 22 : 2 }}
-                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                  />
-                </button>
-              </div>
+              )}
 
               <button
                 onClick={saveAndNext}

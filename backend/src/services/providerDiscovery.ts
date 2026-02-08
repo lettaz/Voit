@@ -1,15 +1,26 @@
 /**
  * Provider Discovery Service
  *
- * Uses Firecrawl to search the web for providers (dentists, restaurants, etc.)
- * and extract structured data. Falls back to mock data when Firecrawl API key
- * is not configured or when an error occurs.
+ * Uses Google Places API as the **primary** source for finding providers
+ * (dentists, restaurants, barbers, etc.), with Firecrawl as a **secondary**
+ * enrichment source for data that Places may not have (descriptions,
+ * specialties, etc.).
+ *
+ * Falls back to mock data when neither API is configured or when errors occur.
  *
  * DEBUG_MODE: When enabled, the phone number used for *calls* (not stored data)
  * is overridden with DEBUG_PHONE_NUMBER. The real phone is always stored.
  */
 
 import FirecrawlApp from "@mendable/firecrawl-js";
+import {
+  searchNearbyProviders as googleSearchNearby,
+  getPlaceDetails as googleGetPlaceDetails,
+  calculateDistance as googleCalculateDistance,
+  resolveGooglePlacesType,
+  type PlaceSearchResult,
+  type DistanceResult,
+} from "./googleMaps.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -43,13 +54,16 @@ export interface DiscoveredProvider {
 export interface DiscoveryOptions {
   category: string;
   location: string; // e.g. "Portland, OR"
+  lat?: number; // user latitude for Places API
+  lng?: number; // user longitude for Places API
+  radiusMeters?: number; // search radius in meters (default 5000)
   limit?: number;
   query?: string; // additional search terms like "Italian restaurant"
 }
 
 export interface DiscoveryResult {
   providers: DiscoveredProvider[];
-  source: "firecrawl" | "mock";
+  source: "google_places" | "firecrawl" | "mock";
   rawSearchResults?: unknown;
 }
 
@@ -93,84 +107,257 @@ function getFirecrawlClient(): FirecrawlApp | null {
 // ─── Search & Extract ───────────────────────────────────────────────────────
 
 /**
- * Search for providers using Firecrawl's search endpoint, then extract
- * structured data from the results.
+ * Search for providers using Google Places as primary, Firecrawl as secondary.
+ * Falls back to mock data if both fail or are unconfigured.
  */
 export async function discoverProviders(
   options: DiscoveryOptions
 ): Promise<DiscoveryResult> {
+  const limit = options.limit || 10;
+
+  // ─── Try Google Places first (primary) ─────────────────────────────
+  const hasGoogleMapsKey = !!(
+    process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACE_ID
+  );
+  const hasLocation = options.lat !== undefined && options.lng !== undefined;
+
+  if (hasGoogleMapsKey && hasLocation) {
+    try {
+      const placesType = resolveGooglePlacesType(options.category);
+      const radius = options.radiusMeters || 5000;
+
+      console.log(
+        `[ProviderDiscovery] Searching Google Places: type="${placesType}" at (${options.lat}, ${options.lng})`
+      );
+
+      const places = await googleSearchNearby(
+        options.lat!,
+        options.lng!,
+        radius,
+        placesType,
+        limit
+      );
+
+      if (places.length > 0) {
+        // Fetch details for each place (phone, hours, website)
+        const providers: DiscoveredProvider[] = [];
+
+        for (const place of places) {
+          const details = await googleGetPlaceDetails(place.placeId);
+          // Small delay to be polite to the API
+          await new Promise((r) => setTimeout(r, 100));
+
+          const phone =
+            details?.internationalPhone ||
+            details?.phone ||
+            "";
+
+          // Normalize phone to E.164
+          const normalizedPhone = phone ? normalizePhone(phone) : "";
+
+          const locationParts = options.location.split(",").map((s) => s.trim());
+          const city = locationParts[0] || "";
+          const state = locationParts[1] || "";
+
+          // Try to parse city/state from formatted address
+          const addrParts = details?.formattedAddress?.split(",").map((s) => s.trim()) || [];
+          const parsedCity = addrParts.length >= 3 ? addrParts[addrParts.length - 3] : city;
+          const stateZip = addrParts.length >= 2 ? addrParts[addrParts.length - 2] : "";
+          const stateMatch = stateZip.match(/([A-Z]{2})\s*(\d{5})?/);
+          const parsedState = stateMatch?.[1] || state;
+          const parsedZip = stateMatch?.[2] || "";
+
+          providers.push({
+            name: place.name,
+            phone: normalizedPhone,
+            website: details?.website || undefined,
+            address: place.address || details?.formattedAddress || "",
+            city: parsedCity || city,
+            state: parsedState || state,
+            zipCode: parsedZip,
+            lat: place.lat,
+            lng: place.lng,
+            category: options.category,
+            rating: place.rating ?? undefined,
+            reviewCount: place.reviewCount ?? undefined,
+            source: "firecrawl" as const, // Using "firecrawl" to match existing schema enum
+            sourceUrl: undefined,
+            rawData: { placeId: place.placeId, googlePlaces: true },
+            metadata: {
+              placeId: place.placeId,
+              openNow: place.openNow,
+              discoveredVia: "google_places",
+            },
+          });
+        }
+
+        // If Firecrawl is also available, try to enrich with descriptions/specialties
+        const firecrawlClient = getFirecrawlClient();
+        if (firecrawlClient && providers.length > 0) {
+          try {
+            await enrichWithFirecrawl(firecrawlClient, providers, options);
+          } catch (err) {
+            console.warn(
+              "[ProviderDiscovery] Firecrawl enrichment failed (non-fatal):",
+              err
+            );
+          }
+        }
+
+        console.log(
+          `[ProviderDiscovery] Found ${providers.length} providers via Google Places`
+        );
+
+        return {
+          providers,
+          source: "google_places",
+        };
+      }
+    } catch (error) {
+      console.error("[ProviderDiscovery] Google Places error:", error);
+    }
+  }
+
+  // ─── Fallback to Firecrawl (secondary) ─────────────────────────────
   const client = getFirecrawlClient();
 
-  if (!client) {
-    console.log(
-      "[ProviderDiscovery] No Firecrawl API key — falling back to mock data"
-    );
-    return {
-      providers: generateMockProviders(options),
-      source: "mock",
-    };
+  if (client) {
+    try {
+      const searchQuery = buildSearchQuery(options);
+      console.log(`[ProviderDiscovery] Searching Firecrawl: "${searchQuery}"`);
+
+      const searchResponse = await client.search(searchQuery, {
+        limit,
+      });
+
+      const webResults = searchResponse.web || [];
+
+      if (webResults.length > 0) {
+        const providers: DiscoveredProvider[] = [];
+
+        for (const result of webResults) {
+          const extracted = parseSearchResult(
+            result as Record<string, unknown>,
+            options.category
+          );
+          if (extracted) {
+            providers.push(extracted);
+          }
+        }
+
+        if (providers.length > 0) {
+          console.log(
+            `[ProviderDiscovery] Found ${providers.length} providers via Firecrawl`
+          );
+
+          return {
+            providers,
+            source: "firecrawl",
+            rawSearchResults: searchResponse,
+          };
+        }
+      }
+
+      console.log("[ProviderDiscovery] No Firecrawl results either");
+    } catch (error) {
+      console.error("[ProviderDiscovery] Firecrawl error:", error);
+    }
   }
 
-  try {
-    const searchQuery = buildSearchQuery(options);
-    console.log(`[ProviderDiscovery] Searching Firecrawl: "${searchQuery}"`);
+  // ─── Final fallback: mock data ─────────────────────────────────────
+  console.log(
+    "[ProviderDiscovery] No APIs returned results — falling back to mock data"
+  );
+  return {
+    providers: generateMockProviders(options),
+    source: "mock",
+  };
+}
 
-    // Use Firecrawl search to find relevant pages
-    // v4 API: search() returns SearchData { web?: [...], news?: [...], images?: [...] }
-    const searchResponse = await client.search(searchQuery, {
-      limit: options.limit || 10,
-    });
+/**
+ * Enrich Google Places results with Firecrawl data (descriptions, specialties).
+ * Runs a single search and tries to match by name.
+ */
+async function enrichWithFirecrawl(
+  client: FirecrawlApp,
+  providers: DiscoveredProvider[],
+  options: DiscoveryOptions
+): Promise<void> {
+  const searchQuery = buildSearchQuery(options);
+  console.log(
+    `[ProviderDiscovery] Enriching ${providers.length} providers via Firecrawl`
+  );
 
-    const webResults = searchResponse.web || [];
+  const searchResponse = await client.search(searchQuery, {
+    limit: options.limit || 10,
+  });
 
-    if (webResults.length === 0) {
-      console.log(
-        "[ProviderDiscovery] No Firecrawl results — falling back to mock"
-      );
-      return {
-        providers: generateMockProviders(options),
-        source: "mock",
-        rawSearchResults: searchResponse,
-      };
-    }
+  const webResults = searchResponse.web || [];
 
-    // Extract provider info from search results
-    const providers: DiscoveredProvider[] = [];
+  for (const result of webResults) {
+    const parsed = parseSearchResult(
+      result as Record<string, unknown>,
+      options.category
+    );
+    if (!parsed) continue;
 
-    for (const result of webResults) {
-      const extracted = parseSearchResult(result as Record<string, unknown>, options.category);
-      if (extracted) {
-        providers.push(extracted);
+    // Try to match by name (fuzzy)
+    const match = providers.find(
+      (p) =>
+        p.name.toLowerCase().includes(parsed.name.toLowerCase()) ||
+        parsed.name.toLowerCase().includes(p.name.toLowerCase())
+    );
+
+    if (match) {
+      // Enrich missing fields
+      if (!match.description && parsed.description) {
+        match.description = parsed.description;
+      }
+      if (
+        (!match.specialties || match.specialties.length === 0) &&
+        parsed.specialties
+      ) {
+        match.specialties = parsed.specialties;
+      }
+      if (!match.website && parsed.website) {
+        match.website = parsed.website;
       }
     }
-
-    if (providers.length === 0) {
-      console.log(
-        "[ProviderDiscovery] Could not extract structured data — falling back to mock"
-      );
-      return {
-        providers: generateMockProviders(options),
-        source: "mock",
-        rawSearchResults: searchResponse,
-      };
-    }
-
-    console.log(
-      `[ProviderDiscovery] Found ${providers.length} providers via Firecrawl`
-    );
-
-    return {
-      providers,
-      source: "firecrawl",
-      rawSearchResults: searchResponse,
-    };
-  } catch (error) {
-    console.error("[ProviderDiscovery] Firecrawl error:", error);
-    return {
-      providers: generateMockProviders(options),
-      source: "mock",
-    };
   }
+}
+
+/**
+ * Rank providers by distance from a user's location.
+ * Uses Google Maps Distance Matrix for accurate driving distances.
+ */
+export async function rankByDistance(
+  providers: DiscoveredProvider[],
+  userLat: number,
+  userLng: number
+): Promise<Array<DiscoveredProvider & { distance?: DistanceResult }>> {
+  const results: Array<DiscoveredProvider & { distance?: DistanceResult }> = [];
+
+  for (const provider of providers) {
+    if (provider.lat && provider.lng) {
+      const distance = await googleCalculateDistance(
+        { lat: userLat, lng: userLng },
+        { lat: provider.lat, lng: provider.lng }
+      );
+      results.push({ ...provider, distance: distance || undefined });
+    } else {
+      results.push({ ...provider });
+    }
+  }
+
+  // Sort by distance (nearest first), providers without distance go last
+  results.sort((a, b) => {
+    if (!a.distance && !b.distance) return 0;
+    if (!a.distance) return 1;
+    if (!b.distance) return -1;
+    return a.distance.distanceMeters - b.distance.distanceMeters;
+  });
+
+  return results;
 }
 
 /**

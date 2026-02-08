@@ -11,7 +11,10 @@
  */
 
 import { getCallPhoneNumber, isDebugMode } from "./providerDiscovery.js";
-import { getSystemPrompt, getFirstMessage } from "./agentPrompt.js";
+import { composeSystemPrompt, getFirstMessage } from "./agentPrompt.js";
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../../../convex/_generated/api.js";
+import type { Id } from "../../../convex/_generated/dataModel.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -23,6 +26,7 @@ export interface CampaignProvider {
 }
 
 export interface CampaignUser {
+  userId: string; // Convex user ID
   name: string;
   phone: string;
 }
@@ -125,6 +129,10 @@ async function elevenLabsFetch<T>(
  *
  * Each provider becomes a recipient with custom_variables that the agent's
  * system prompt uses via {{variable_name}} syntax.
+ *
+ * The system prompt is composed from the two-layer architecture:
+ * BASE_PROMPT + user's custom prompt (if any).
+ * The agent_name variable is read from the user's profile (defaults to "Voit").
  */
 export async function launchCampaign(
   params: LaunchCampaignParams
@@ -140,10 +148,34 @@ export async function launchCampaign(
     );
   }
 
+  // Read user profile for custom prompt and agent name
+  let userCustomPrompt: string | null = null;
+  let agentName = "Voit"; // Default
+
+  try {
+    const convexUrl = process.env.CONVEX_URL || process.env.NEXT_PUBLIC_CONVEX_URL;
+    if (convexUrl && user.userId) {
+      const convex = new ConvexHttpClient(convexUrl);
+      const userProfile = await convex.query(api.users.getById, {
+        id: user.userId as Id<"users">,
+      });
+      if (userProfile) {
+        userCustomPrompt = userProfile.customPrompt || null;
+        agentName = userProfile.agentName || "Voit";
+      }
+    }
+  } catch (error) {
+    console.warn("[Orchestrator] Could not read user profile for prompt composition:", error);
+  }
+
+  // Compose the two-layer system prompt
+  const systemPrompt = composeSystemPrompt(userCustomPrompt);
+
   const recipients: BatchRecipient[] = providers.map((provider) => ({
     phone_number: getCallPhoneNumber(provider.phone),
     name: provider.name,
     custom_variables: {
+      agent_name: agentName,
       campaign_id: campaignId,
       provider_id: provider.providerId,
       provider_name: provider.name,
@@ -160,13 +192,13 @@ export async function launchCampaign(
     agent_id: getAgentId(),
     phone_number_id: getPhoneNumberId(),
     recipients,
-    // Override system prompt and first message with our templates
-    system_prompt: getSystemPrompt(),
+    // Override system prompt and first message with our composed templates
+    system_prompt: systemPrompt,
     first_message: getFirstMessage(),
   };
 
   console.log(
-    `[Orchestrator] Submitting batch with ${recipients.length} recipients`
+    `[Orchestrator] Submitting batch with ${recipients.length} recipients (agent_name="${agentName}")`
   );
 
   const response = await elevenLabsFetch<{ batch_call_id: string }>(

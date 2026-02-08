@@ -21,10 +21,17 @@ import {
   AlertCircle,
   ArrowRightLeft,
   ChevronDown,
+  ChevronUp,
   Phone,
+  User,
+  Lock,
+  Edit3,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@convex/_generated/api";
 import {
   getAgent,
   updateAgent,
@@ -97,6 +104,15 @@ const SYSTEM_TOOLS = [
 const AgentSettingsPage = ({ onBack }: AgentSettingsPageProps) => {
   const { t } = useTranslation();
   const { isDark } = useTheme();
+  const { convexUserId } = useAuth();
+
+  // ─── Convex queries / mutations ─────────────────
+  const convexUser = useQuery(
+    api.users.getById,
+    convexUserId ? { id: convexUserId } : "skip"
+  );
+  const updateAgentNameMut = useMutation(api.users.updateAgentName);
+  const updateCustomPromptMut = useMutation(api.users.updateCustomPrompt);
 
   // ─── State ──────────────────────────────────────
   const [loading, setLoading] = useState(true);
@@ -145,6 +161,32 @@ const AgentSettingsPage = ({ onBack }: AgentSettingsPageProps) => {
   // Behavior state
   const [firstMessage, setFirstMessage] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
+  const [agentName, setAgentName] = useState("Voit");
+  const [customPrompt, setCustomPrompt] = useState("");
+  const [showBasePrompt, setShowBasePrompt] = useState(false);
+
+  // The base prompt is fetched from the backend — hardcoded summary here for display
+  const BASE_PROMPT_PREVIEW = `# Base System Prompt (managed by Voit)
+
+This read-only prompt includes:
+- Agent personality and introduction flow
+- Multilingual support (auto-detects provider language)
+- All 10 tool definitions (report_availability, check_calendar, calculate_distance, validate_slot, request_user_feedback, query_user_context, etc.)
+- Guardrails and safety rules
+- Context variables (campaign_id, provider_id, etc.)
+- Call flow (greeting → inquiry → validation → reporting → termination)
+
+Uses {{agent_name}} as a dynamic variable set from your Agent Name below.
+
+Your custom instructions below are appended after this base prompt.`;
+
+  // ─── Sync Convex user data → local state ────────
+  useEffect(() => {
+    if (convexUser) {
+      setAgentName(convexUser.agentName || "Voit");
+      setCustomPrompt(convexUser.customPrompt || "");
+    }
+  }, [convexUser]);
 
   // ─── Load agent config ──────────────────────────
   useEffect(() => {
@@ -393,19 +435,36 @@ const AgentSettingsPage = ({ onBack }: AgentSettingsPageProps) => {
     }
   };
 
+  const handleSaveAgentName = async () => {
+    if (!convexUserId) return;
+    setSaving(true);
+    try {
+      await updateAgentNameMut({ id: convexUserId, agentName: agentName.trim() || "Voit" });
+      showSuccess(t("agentSettings.agentNameSaved"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save agent name");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSaveBehavior = async () => {
     setSaving(true);
     try {
+      // Save custom prompt to Convex (this is what the orchestrator reads)
+      if (convexUserId) {
+        await updateCustomPromptMut({ id: convexUserId, customPrompt });
+      }
+
+      // Also update the ElevenLabs dashboard agent with the first message
       await updateAgent({
         conversation_config: {
           agent: {
             first_message: firstMessage,
-            prompt: {
-              prompt: systemPrompt,
-            },
           },
         } as AgentConfig["conversation_config"],
       });
+
       showSuccess(t("agentSettings.behaviorSaved"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save behavior");
@@ -903,6 +962,36 @@ const AgentSettingsPage = ({ onBack }: AgentSettingsPageProps) => {
             animate={{ opacity: 1 }}
             className="space-y-4"
           >
+            {/* Agent Name */}
+            <div className="glass rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <User className="w-4 h-4 text-primary" />
+                <label className="text-xs font-semibold text-foreground">
+                  {t("agentSettings.agentName")}
+                </label>
+              </div>
+              <p className="text-[10px] text-muted-foreground mb-3">
+                {t("agentSettings.agentNameDesc")}
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={agentName}
+                  onChange={(e) => setAgentName(e.target.value)}
+                  placeholder={t("agentSettings.agentNamePlaceholder")}
+                  className="flex-1 px-3 py-2 rounded-lg bg-background/60 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50"
+                />
+                <button
+                  onClick={handleSaveAgentName}
+                  disabled={saving || !agentName.trim()}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+                  style={{ background: "var(--gradient-primary)" }}
+                >
+                  {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : t("agentSettings.applyVoice")}
+                </button>
+              </div>
+            </div>
+
             {/* First message */}
             <div>
               <label className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium mb-2 block">
@@ -917,17 +1006,67 @@ const AgentSettingsPage = ({ onBack }: AgentSettingsPageProps) => {
               />
             </div>
 
-            {/* System prompt */}
+            {/* Base Prompt (read-only, collapsible) */}
+            <div className="glass rounded-xl overflow-hidden">
+              <button
+                onClick={() => setShowBasePrompt(!showBasePrompt)}
+                className="w-full p-3 flex items-center gap-3 text-left"
+              >
+                <div className="w-8 h-8 rounded-lg glass flex items-center justify-center shrink-0">
+                  <Lock className="w-4 h-4 text-muted-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground">
+                    {t("agentSettings.basePrompt")}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {t("agentSettings.basePromptDesc")}
+                  </p>
+                </div>
+                {showBasePrompt ? (
+                  <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+                )}
+              </button>
+              {showBasePrompt && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  transition={{ duration: 0.2 }}
+                  className="border-t border-border/30 px-3 pb-3"
+                >
+                  <pre
+                    className="mt-3 w-full px-3 py-2.5 rounded-xl border border-border/30 text-[10px] text-muted-foreground leading-relaxed font-mono whitespace-pre-wrap max-h-[300px] overflow-y-auto"
+                    style={{
+                      background: isDark
+                        ? "hsl(222 20% 10% / 0.5)"
+                        : "hsl(0 0% 96% / 0.5)",
+                    }}
+                  >
+                    {BASE_PROMPT_PREVIEW}
+                  </pre>
+                </motion.div>
+              )}
+            </div>
+
+            {/* Custom Instructions (user-editable, writes to Convex) */}
             <div>
-              <label className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium mb-2 block">
-                {t("agentSettings.systemPrompt")}
-              </label>
+              <div className="flex items-center gap-2 mb-1.5">
+                <Edit3 className="w-3.5 h-3.5 text-primary" />
+                <label className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">
+                  {t("agentSettings.customPrompt")}
+                </label>
+              </div>
+              <p className="text-[10px] text-muted-foreground mb-2">
+                {t("agentSettings.customPromptDesc")}
+              </p>
               <textarea
-                value={systemPrompt}
-                onChange={(e) => setSystemPrompt(e.target.value)}
-                rows={24}
-                className="w-full px-3 py-2.5 rounded-xl bg-background/60 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 resize-y font-mono text-[11px] leading-relaxed min-h-[400px]"
-                placeholder={t("agentSettings.systemPromptPlaceholder")}
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                rows={8}
+                className="w-full px-3 py-2.5 rounded-xl bg-background/60 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 resize-y font-mono text-[11px] leading-relaxed min-h-[150px]"
+                placeholder={t("agentSettings.customPromptPlaceholder")}
               />
             </div>
 

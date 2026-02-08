@@ -143,6 +143,7 @@ async function main() {
         },
       ],
       user: {
+        userId: testUser._id,
         name: testUser.name,
         phone: process.env.DEBUG_PHONE_NUMBER || testUser.email,
       },

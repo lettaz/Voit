@@ -36,6 +36,10 @@ pnpm-debug.log*
 
 # Convex
 convex/_generated/
+convex/*.d.ts
+convex/*.d.ts.map
+convex/*.js
+convex/*.js.map
 
 # Misc
 *.log

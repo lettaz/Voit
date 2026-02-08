@@ -71,6 +71,12 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
 
+    // Agent name (dynamic, used as {{agent_name}} in prompts)
+    agentName: v.optional(v.string()),
+
+    // Custom prompt (user-editable, appended to base prompt)
+    customPrompt: v.optional(v.string()),
+
     // Extensibility
     metadata: v.optional(v.any()),
   })
@@ -122,6 +128,9 @@ export default defineSchema({
         sunday: v.optional(v.object({ open: v.string(), close: v.string() })),
       })
     ),
+
+    // Google Places reference
+    placeId: v.optional(v.string()),
 
     // Source / crawl data
     source: v.union(
@@ -230,6 +239,21 @@ export default defineSchema({
     // ElevenLabs references
     elevenLabsCallId: v.optional(v.string()),
     elevenLabsConversationId: v.optional(v.string()),
+
+    // Real-time event feed (for live call view)
+    liveEvents: v.optional(
+      v.array(
+        v.object({
+          type: v.string(),
+          data: v.any(),
+          timestamp: v.number(),
+        })
+      )
+    ),
+
+    // User-in-the-loop feedback
+    pendingUserQuestion: v.optional(v.string()),
+    userResponse: v.optional(v.string()),
 
     startedAt: v.optional(v.number()),
     endedAt: v.optional(v.number()),

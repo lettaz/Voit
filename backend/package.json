@@ -20,6 +20,7 @@
     "convex": "^1.31.7",
     "dotenv": "^17.2.4",
     "fastify": "^5.7.4",
+    "googleapis": "^171.4.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {

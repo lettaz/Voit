@@ -109,6 +109,7 @@ export async function campaignRoutes(
           category: p.category,
         })),
         user: {
+          userId: user._id,
           name: user.name,
           phone: user.email, // Use email as fallback; real phone from user profile when available
         },
