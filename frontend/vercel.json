@@ -4,6 +4,10 @@
     {
       "source": "/api/auth/:path*",
       "destination": "https://tame-crow-429.convex.site/api/auth/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://backend-production-f2df.up.railway.app/api/:path*"
     }
   ]
 }
