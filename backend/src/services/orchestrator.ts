@@ -186,12 +186,6 @@ export async function launchCampaign(
     return {
       phone_number: callPhone,
       conversation_initiation_client_data: {
-        conversation_config_override: {
-          agent: {
-            prompt: { prompt: systemPrompt },
-            first_message: getFirstMessage(),
-          },
-        },
         dynamic_variables: {
           agent_name: agentName,
           campaign_id: campaignId,
