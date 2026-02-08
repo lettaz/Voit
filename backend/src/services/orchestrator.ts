@@ -47,7 +47,6 @@ export interface LaunchCampaignParams {
 
 export interface BatchRecipient {
   phone_number: string;
-  name?: string;
   conversation_initiation_client_data?: {
     conversation_config_override?: {
       agent?: {
@@ -55,8 +54,8 @@ export interface BatchRecipient {
         first_message?: string;
       };
     };
+    dynamic_variables?: Record<string, string | number | boolean>;
   };
-  custom_variables?: Record<string, string>;
 }
 
 export interface BatchCallPayload {
@@ -175,43 +174,39 @@ export async function launchCampaign(
   // Compose the two-layer system prompt
   const systemPrompt = composeSystemPrompt(userCustomPrompt);
 
-  const recipients: BatchRecipient[] = providers.map((provider) => {
+  // Build recipients with per-recipient overrides and dynamic variables
+  // Per the ElevenLabs API spec, dynamic_variables and conversation_config_override
+  // are both inside conversation_initiation_client_data
+  const batchRecipients: BatchRecipient[] = providers.map((provider) => {
     const callPhone = getCallPhoneNumber(provider.phone);
     console.log(
       `[Orchestrator] Recipient: ${provider.name} | real=${provider.phone} | calling=${callPhone}`
     );
-    return {
-    phone_number: callPhone,
-    name: provider.name,
-    custom_variables: {
-      agent_name: agentName,
-      campaign_id: campaignId,
-      provider_id: provider.providerId,
-      provider_name: provider.name,
-      provider_category: provider.category,
-      service_type: request.serviceType,
-      timeframe: request.timeframe,
-      preferred_time: request.preferredTime,
-      client_name: user.name,
-      client_phone: user.phone,
-    },
-  };
-  });
 
-  // Build recipients with per-recipient prompt/first_message overrides
-  const batchRecipients: BatchRecipient[] = recipients.map((r) => ({
-    phone_number: r.phone_number,
-    name: r.name,
-    conversation_initiation_client_data: {
-      conversation_config_override: {
-        agent: {
-          prompt: { prompt: systemPrompt },
-          first_message: getFirstMessage(),
+    return {
+      phone_number: callPhone,
+      conversation_initiation_client_data: {
+        conversation_config_override: {
+          agent: {
+            prompt: { prompt: systemPrompt },
+            first_message: getFirstMessage(),
+          },
+        },
+        dynamic_variables: {
+          agent_name: agentName,
+          campaign_id: campaignId,
+          provider_id: provider.providerId,
+          provider_name: provider.name,
+          provider_category: provider.category,
+          service_type: request.serviceType,
+          timeframe: request.timeframe,
+          preferred_time: request.preferredTime,
+          client_name: user.name,
+          client_phone: user.phone,
         },
       },
-    },
-    custom_variables: r.custom_variables,
-  }));
+    };
+  });
 
   const payload: BatchCallPayload = {
     call_name: `Campaign ${campaignId.slice(0, 8)} - ${request.category}`,
