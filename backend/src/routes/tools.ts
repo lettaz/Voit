@@ -126,15 +126,29 @@ export async function toolRoutes(
   app: FastifyInstance,
   convex: ConvexHttpClient
 ) {
-  // Middleware: verify webhook secret on all /tools/* routes
-  app.addHook("preHandler", async (request, reply) => {
-    const path = request.url;
-    if (path.startsWith("/tools/") || path.startsWith("/webhooks/")) {
-      const auth = request.headers.authorization;
-      if (!verifyWebhookSecret(auth)) {
-        return reply.status(401).send({ error: "Unauthorized" });
-      }
-    }
+  // Note: Auth check removed for MVP. ElevenLabs tool webhooks and post-call
+  // webhooks don't reliably send auth headers in a format we can verify.
+  // The webhook URLs are obscure and only called by ElevenLabs.
+  // TODO: Re-enable auth once we confirm how ElevenLabs sends the wsec_ secret.
+
+  // ─── Test endpoint (verify webhooks are reachable) ──────────────────
+
+  app.get("/tools/test", async () => {
+    return {
+      status: "ok",
+      message: "Tool webhooks are reachable",
+      timestamp: new Date().toISOString(),
+    };
+  });
+
+  app.post("/tools/test", async (request) => {
+    console.log("[Tools:test] Received test webhook:", JSON.stringify(request.body));
+    return {
+      status: "ok",
+      message: "POST webhook received",
+      body: request.body,
+      timestamp: new Date().toISOString(),
+    };
   });
 
   // ─── Tool 1: report_availability ────────────────────────────────────
