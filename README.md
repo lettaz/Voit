@@ -66,6 +66,10 @@ pnpm run dev:backend    # http://localhost:3088
 
 All auth configuration (secrets, Google OAuth keys) is stored as **Convex environment variables on the cloud deployment**, which the project owner already set up. Those are shared automatically -- every client connecting to the same Convex deployment uses them. You do **not** need to run `npx convex env set` or `npx convex dev` unless you're changing the Convex schema or functions.
 
+> **WARNING: Do NOT run `npx convex dev` or `pnpm run dev` (the root command that includes Convex).**
+> If you do, Convex will auto-create a `.env.local` file that may provision a **brand new empty deployment** with no auth secrets configured. This will break signup/login with the error: `BetterAuthError: You are using the default secret`.
+> If this happens, delete `.env.local` and restart the frontend.
+
 ### Important: Auth requires the Vite dev server
 
 Account creation (signup/login) works through a **Vite proxy** that forwards `/api/auth/*` requests from `localhost:8080` to the Convex site URL. This means:
